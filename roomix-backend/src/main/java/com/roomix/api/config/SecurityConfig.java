@@ -1,4 +1,4 @@
-﻿package com.roomix.api.config;
+package com.roomix.api.config;
 
 import com.roomix.api.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;

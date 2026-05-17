@@ -1,4 +1,4 @@
-﻿package com.roomix.api.model.dto.response;
+package com.roomix.api.model.dto.response;
 
 import lombok.Builder;
 import lombok.Data;

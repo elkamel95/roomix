@@ -1,4 +1,4 @@
-﻿package com.roomix.api.controller;
+package com.roomix.api.controller;
 
 import com.roomix.api.model.dto.response.UserResponse;
 import com.roomix.api.repository.UserRepository;
@@ -8,6 +8,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -44,13 +45,13 @@ public class UserController {
                     int used = user.getDailyGenerations();
                     int remaining = limit == -1 ? Integer.MAX_VALUE : Math.max(0, limit - used);
 
-                    return ResponseEntity.ok(Map.of(
-                            "plan", user.getPlan().name(),
-                            "dailyUsed", used,
-                            "dailyLimit", limit,
-                            "remaining", remaining,
-                            "resetsAt", user.getLastGenerationReset().plusDays(1).toString()
-                    ));
+                    Map<String, Object> quotaMap = new HashMap<>();
+                    quotaMap.put("plan", user.getPlan().name());
+                    quotaMap.put("dailyUsed", used);
+                    quotaMap.put("dailyLimit", limit);
+                    quotaMap.put("remaining", remaining);
+                    quotaMap.put("resetsAt", user.getLastGenerationReset().plusDays(1).toString());
+                    return ResponseEntity.ok(quotaMap);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

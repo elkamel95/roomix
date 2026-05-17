@@ -1,4 +1,4 @@
-﻿package com.roomix.api.security;
+package com.roomix.api.security;
 
 import com.roomix.api.model.entity.User;
 import com.roomix.api.repository.UserRepository;

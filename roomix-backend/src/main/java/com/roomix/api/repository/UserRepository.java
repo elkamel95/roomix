@@ -1,4 +1,4 @@
-﻿package com.roomix.api.repository;
+package com.roomix.api.repository;
 
 import com.roomix.api.model.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;

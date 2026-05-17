@@ -1,4 +1,4 @@
-﻿package com.roomix.api.model.entity;
+package com.roomix.api.model.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

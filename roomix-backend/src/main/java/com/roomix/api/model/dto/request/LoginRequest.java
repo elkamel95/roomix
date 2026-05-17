@@ -1,4 +1,4 @@
-﻿package com.roomix.api.model.dto.request;
+package com.roomix.api.model.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

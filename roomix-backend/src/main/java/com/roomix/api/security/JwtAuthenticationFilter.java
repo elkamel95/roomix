@@ -1,4 +1,4 @@
-﻿package com.roomix.api.security;
+package com.roomix.api.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

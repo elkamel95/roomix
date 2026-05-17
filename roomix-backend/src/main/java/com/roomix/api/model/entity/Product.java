@@ -1,4 +1,4 @@
-﻿package com.roomix.api.model.entity;
+package com.roomix.api.model.entity;
 
 import com.roomix.api.model.enums.ProductBrand;
 import com.roomix.api.model.enums.ProductCategory;

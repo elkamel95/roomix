@@ -1,4 +1,4 @@
-﻿package com.roomix.api.service;
+package com.roomix.api.service;
 
 import com.roomix.api.exception.QuotaExceededException;
 import com.roomix.api.exception.ResourceNotFoundException;

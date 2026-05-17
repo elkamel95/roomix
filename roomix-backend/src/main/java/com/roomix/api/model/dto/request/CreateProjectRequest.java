@@ -1,4 +1,4 @@
-﻿package com.roomix.api.model.dto.request;
+package com.roomix.api.model.dto.request;
 
 import com.roomix.api.model.enums.DecorationStyle;
 import jakarta.validation.constraints.NotNull;

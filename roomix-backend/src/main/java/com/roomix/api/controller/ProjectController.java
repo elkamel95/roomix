@@ -1,4 +1,4 @@
-﻿package com.roomix.api.controller;
+package com.roomix.api.controller;
 
 import com.roomix.api.model.dto.request.CreateProjectRequest;
 import com.roomix.api.model.dto.response.GenerationResponse;

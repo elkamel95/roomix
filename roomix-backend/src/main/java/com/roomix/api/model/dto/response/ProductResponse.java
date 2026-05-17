@@ -1,4 +1,4 @@
-﻿package com.roomix.api.model.dto.response;
+package com.roomix.api.model.dto.response;
 
 import com.roomix.api.model.enums.ProductBrand;
 import com.roomix.api.model.enums.ProductCategory;
