@@ -7,22 +7,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- ============================================================
--- ENUMS
--- ============================================================
-CREATE TYPE plan_type AS ENUM ('FREE', 'PREMIUM', 'PRO');
-CREATE TYPE project_status AS ENUM ('PENDING', 'PROCESSING', 'DONE', 'FAILED');
-CREATE TYPE decoration_style AS ENUM (
-  'SCANDINAVIAN', 'MODERN_LUXURY', 'MINIMALIST', 'JAPANESE_ZEN',
-  'ARABIC_MODERN', 'GAMER_SETUP', 'COZY', 'INDUSTRIAL',
-  'SMART_OFFICE', 'DEVELOPER_SETUP'
-);
-CREATE TYPE ai_model AS ENUM ('SDXL', 'FLUX', 'DALLE3', 'CONTROLNET');
-CREATE TYPE product_brand AS ENUM ('IKEA', 'AMAZON', 'LEROY_MERLIN', 'ACTION', 'OTHER');
-CREATE TYPE product_category AS ENUM (
-  'SOFA', 'TABLE', 'CHAIR', 'LAMP', 'CARPET', 'PLANT',
-  'CURTAIN', 'SHELF', 'DESK', 'BED', 'DECORATION', 'OTHER'
-);
+-- Note: enums stored as VARCHAR for Hibernate @Enumerated(EnumType.STRING) compatibility
 
 -- ============================================================
 -- TABLE : users
@@ -35,7 +20,7 @@ CREATE TABLE users (
   last_name               VARCHAR(100),
   avatar_url              TEXT,
   google_id               VARCHAR(255) UNIQUE,
-  plan                    plan_type NOT NULL DEFAULT 'FREE',
+  plan                    VARCHAR(50) NOT NULL DEFAULT 'FREE',
   plan_expiry             TIMESTAMP,
   daily_generations       INTEGER NOT NULL DEFAULT 0,
   last_generation_reset   DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -53,7 +38,7 @@ CREATE TABLE subscriptions (
   user_id                 UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   stripe_subscription_id  VARCHAR(255) UNIQUE,
   stripe_customer_id      VARCHAR(255),
-  plan                    plan_type NOT NULL,
+  plan                    VARCHAR(50) NOT NULL,
   status                  VARCHAR(50) NOT NULL DEFAULT 'active',
   current_period_start    TIMESTAMP,
   current_period_end      TIMESTAMP,
@@ -71,8 +56,8 @@ CREATE TABLE projects (
   name                VARCHAR(255) NOT NULL DEFAULT 'Mon projet',
   original_image_url  TEXT NOT NULL,
   original_image_key  VARCHAR(500),
-  status              project_status NOT NULL DEFAULT 'PENDING',
-  style               decoration_style NOT NULL,
+  status              VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+  style               VARCHAR(50) NOT NULL,
   budget              DECIMAL(10, 2),
   room_analysis       JSONB,
   created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -89,7 +74,7 @@ CREATE TABLE generations (
   result_image_key          VARCHAR(500),
   prompt                    TEXT NOT NULL,
   negative_prompt           TEXT,
-  model                     ai_model NOT NULL DEFAULT 'SDXL',
+  model                     VARCHAR(50) NOT NULL DEFAULT 'SDXL',
   processing_time_ms        INTEGER,
   tokens_used               INTEGER,
   cost_usd                  DECIMAL(10, 6),
@@ -106,8 +91,8 @@ CREATE TABLE products (
   generation_id   UUID NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
   name            VARCHAR(255) NOT NULL,
   description     TEXT,
-  category        product_category NOT NULL DEFAULT 'OTHER',
-  brand           product_brand NOT NULL DEFAULT 'OTHER',
+  category        VARCHAR(50) NOT NULL DEFAULT 'OTHER',
+  brand           VARCHAR(50) NOT NULL DEFAULT 'OTHER',
   price           DECIMAL(10, 2),
   currency        VARCHAR(3) DEFAULT 'EUR',
   product_url     TEXT,
