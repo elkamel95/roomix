@@ -1,0 +1,559 @@
+openapi: 3.0.3
+info:
+  title: HomeGPT AI API
+  description: API REST pour l'application de décoration d'intérieur par IA
+  version: 1.0.0
+  contact:
+    email: dev@homegpt.ai
+
+servers:
+  - url: https://api.homegpt.ai/api/v1
+    description: Production
+  - url: http://localhost:8080/api/v1
+    description: Development
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: auth
+    description: Authentification et gestion des tokens
+  - name: projects
+    description: Gestion des projets de décoration
+  - name: generation
+    description: Génération IA
+  - name: products
+    description: Shopping et liens produits
+  - name: users
+    description: Profil utilisateur et abonnements
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Inscription
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Compte créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Email déjà utilisé
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Connexion
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Identifiants invalides
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rafraîchir le token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Nouveau token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Déconnexion
+      responses:
+        '204':
+          description: Déconnecté
+
+  /users/me:
+    get:
+      tags: [users]
+      summary: Profil utilisateur
+      responses:
+        '200':
+          description: Profil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+
+    put:
+      tags: [users]
+      summary: Mettre à jour le profil
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Profil mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+
+  /users/me/quota:
+    get:
+      tags: [users]
+      summary: Quota de générations restantes
+      responses:
+        '200':
+          description: Quota
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaResponse'
+
+  /projects:
+    get:
+      tags: [projects]
+      summary: Liste des projets de l'utilisateur
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, DONE, FAILED]
+      responses:
+        '200':
+          description: Liste paginée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPageResponse'
+
+    post:
+      tags: [projects]
+      summary: Créer un projet (upload photo + choix style)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image, style]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Photo de la pièce (JPG/PNG, max 10MB)
+                style:
+                  type: string
+                  enum: [SCANDINAVIAN, MODERN_LUXURY, MINIMALIST, JAPANESE_ZEN, ARABIC_MODERN, GAMER_SETUP, COZY, INDUSTRIAL, SMART_OFFICE, DEVELOPER_SETUP]
+                name:
+                  type: string
+                  default: Mon projet
+                budget:
+                  type: number
+                  description: Budget max en EUR (optionnel)
+      responses:
+        '201':
+          description: Projet créé, génération démarrée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '402':
+          description: Quota gratuit épuisé
+        '413':
+          description: Image trop lourde
+
+  /projects/{id}:
+    get:
+      tags: [projects]
+      summary: Détail d'un projet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Projet avec générations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailResponse'
+        '404':
+          description: Projet non trouvé
+
+    put:
+      tags: [projects]
+      summary: Renommer un projet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Projet mis à jour
+
+    delete:
+      tags: [projects]
+      summary: Supprimer un projet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Supprimé
+
+  /projects/{id}/status:
+    get:
+      tags: [generation]
+      summary: Statut de la génération IA (polling)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Statut actuel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationStatusResponse'
+
+  /projects/{id}/regenerate:
+    post:
+      tags: [generation]
+      summary: Re-générer avec le même style
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Re-génération démarrée
+
+  /projects/{id}/products:
+    get:
+      tags: [products]
+      summary: Produits shopping pour un projet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Liste des produits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductResponse'
+
+  /subscriptions/checkout:
+    post:
+      tags: [users]
+      summary: Créer une session Stripe checkout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan:
+                  type: string
+                  enum: [PREMIUM, PRO]
+                successUrl:
+                  type: string
+                cancelUrl:
+                  type: string
+      responses:
+        '200':
+          description: URL checkout Stripe
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkoutUrl:
+                    type: string
+
+  /subscriptions/webhook:
+    post:
+      tags: [users]
+      summary: Webhook Stripe (usage interne)
+      security: []
+      responses:
+        '200':
+          description: OK
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        firstName:
+          type: string
+        lastName:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          description: Secondes
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatarUrl:
+          type: string
+        plan:
+          type: string
+          enum: [FREE, PREMIUM, PRO]
+        planExpiry:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+
+    QuotaResponse:
+      type: object
+      properties:
+        plan:
+          type: string
+        dailyUsed:
+          type: integer
+        dailyLimit:
+          type: integer
+        remaining:
+          type: integer
+        resetsAt:
+          type: string
+          format: date
+
+    ProjectResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        originalImageUrl:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, DONE, FAILED]
+        style:
+          type: string
+        budget:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    ProjectDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ProjectResponse'
+        - type: object
+          properties:
+            generation:
+              $ref: '#/components/schemas/GenerationResponse'
+            products:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductResponse'
+
+    ProjectPageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectResponse'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    GenerationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        resultImageUrl:
+          type: string
+        processingTimeMs:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    GenerationStatusResponse:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, DONE, FAILED]
+        progress:
+          type: integer
+          description: Pourcentage 0-100
+        resultImageUrl:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        brand:
+          type: string
+        price:
+          type: number
+        currency:
+          type: string
+        productUrl:
+          type: string
+        affiliateUrl:
+          type: string
+        imageUrl:
+          type: string
+        inStock:
+          type: boolean

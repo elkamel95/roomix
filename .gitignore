@@ -1,0 +1,16 @@
+# Backend
+homegpt-backend/target/
+homegpt-backend/.env
+homegpt-backend/*.jar
+
+# Mobile
+homegpt-mobile/node_modules/
+homegpt-mobile/.expo/
+homegpt-mobile/dist/
+homegpt-mobile/.env
+
+# General
+*.class
+*.log
+.DS_Store
+Thumbs.db
