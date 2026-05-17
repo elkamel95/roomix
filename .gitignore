@@ -9,6 +9,9 @@ homegpt-mobile/.expo/
 homegpt-mobile/dist/
 homegpt-mobile/.env
 
+# Claude Code
+.claude/settings.local.json
+
 # General
 *.class
 *.log
