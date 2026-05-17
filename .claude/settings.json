@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__*",
+      "mcp__jira__*",
+      "PowerShell"
+    ]
+  },
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-atlassian"],
+      "env": {
+        "ATLASSIAN_TOKEN": "${ATLASSIAN_TOKEN}",
+        "ATLASSIAN_EMAIL": "${ATLASSIAN_EMAIL}",
+        "ATLASSIAN_URL": "https://fahmielkamel.atlassian.net"
+      }
+    }
+  }
+}

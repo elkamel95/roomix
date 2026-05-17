@@ -1,13 +1,16 @@
-# Backend
-homegpt-backend/target/
-homegpt-backend/.env
-homegpt-backend/*.jar
+﻿# Backend
+roomix-backend/target/
+roomix-backend/.env
+roomix-backend/*.jar
 
 # Mobile
-homegpt-mobile/node_modules/
-homegpt-mobile/.expo/
-homegpt-mobile/dist/
-homegpt-mobile/.env
+roomix-mobile/node_modules/
+roomix-mobile/.expo/
+roomix-mobile/dist/
+roomix-mobile/.env
+
+# Claude Code
+.claude/settings.local.json
 
 # General
 *.class
