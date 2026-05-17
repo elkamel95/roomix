@@ -1,9 +1,9 @@
-spring:
+﻿spring:
   application:
-    name: homegpt-backend
+    name: roomix-backend
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:homegpt}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ROOMIX}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -53,7 +53,7 @@ app:
 
   storage:
     provider: ${STORAGE_PROVIDER:supabase}
-    bucket: ${STORAGE_BUCKET:homegpt-images}
+    bucket: ${STORAGE_BUCKET:ROOMIX-images}
     region: ${AWS_REGION:eu-west-3}
     access-key: ${AWS_ACCESS_KEY:}
     secret-key: ${AWS_SECRET_KEY:}
@@ -94,6 +94,6 @@ management:
 
 logging:
   level:
-    com.homegpt: DEBUG
+    com.roomix: DEBUG
     org.springframework.security: INFO
     org.hibernate.SQL: DEBUG

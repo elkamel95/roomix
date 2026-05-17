@@ -1,4 +1,4 @@
-package com.homegpt.api.model.enums;
+﻿package com.roomix.api.model.enums;
 
 public enum ProjectStatus {
     PENDING, PROCESSING, DONE, FAILED

@@ -1,4 +1,4 @@
-# HomeGPT AI — Documentation Centrale
+﻿# ROOMIX — Documentation Centrale
 
 Application mobile IA de décoration d'intérieur.
 
@@ -6,9 +6,9 @@ Application mobile IA de décoration d'intérieur.
 
 | Projet | Technologie | Description |
 |--------|-------------|-------------|
-| `homegpt-docs` | Markdown / OpenAPI | Spécifications, architecture, API docs |
-| `homegpt-backend` | Spring Boot 3 / Java 21 | API REST, authentification, orchestration IA |
-| `homegpt-mobile` | React Native / Expo | Application iOS & Android |
+| `roomix-docs` | Markdown / OpenAPI | Spécifications, architecture, API docs |
+| `roomix-backend` | Spring Boot 3 / Java 21 | API REST, authentification, orchestration IA |
+| `roomix-mobile` | React Native / Expo | Application iOS & Android |
 
 ## Architecture Globale
 

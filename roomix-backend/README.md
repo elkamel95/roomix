@@ -1,6 +1,6 @@
-# HomeGPT AI — Backend
+﻿# ROOMIX — Backend
 
-API REST Spring Boot 3 pour HomeGPT AI.
+API REST Spring Boot 3 pour ROOMIX.
 
 ## Prérequis
 
@@ -50,7 +50,7 @@ docker-compose up --build
 ## Structure
 
 ```
-src/main/java/com/homegpt/api/
+src/main/java/com/ROOMIX/api/
 ├── config/          # SecurityConfig, S3Config, AppProperties
 ├── controller/      # AuthController, ProjectController, UserController
 ├── service/         # AuthService, ProjectService, AiOrchestrationService

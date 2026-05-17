@@ -1,7 +1,7 @@
-package com.homegpt.api.model.entity;
+﻿package com.roomix.api.model.entity;
 
-import com.homegpt.api.model.enums.ProductBrand;
-import com.homegpt.api.model.enums.ProductCategory;
+import com.roomix.api.model.enums.ProductBrand;
+import com.roomix.api.model.enums.ProductCategory;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

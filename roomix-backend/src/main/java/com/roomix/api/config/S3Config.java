@@ -1,6 +1,6 @@
-package com.homegpt.api.config;
+﻿package com.roomix.api.config;
 
-import com.homegpt.api.config.AppProperties;
+import com.roomix.api.config.AppProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

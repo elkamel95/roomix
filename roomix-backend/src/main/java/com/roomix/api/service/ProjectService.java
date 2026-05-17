@@ -1,22 +1,22 @@
-package com.homegpt.api.service;
+﻿package com.roomix.api.service;
 
-import com.homegpt.api.exception.QuotaExceededException;
-import com.homegpt.api.exception.ResourceNotFoundException;
-import com.homegpt.api.model.dto.request.CreateProjectRequest;
-import com.homegpt.api.model.dto.response.GenerationResponse;
-import com.homegpt.api.model.dto.response.ProductResponse;
-import com.homegpt.api.model.dto.response.ProjectResponse;
-import com.homegpt.api.model.entity.Generation;
-import com.homegpt.api.model.entity.Project;
-import com.homegpt.api.model.entity.User;
-import com.homegpt.api.model.enums.PlanType;
-import com.homegpt.api.model.enums.ProductBrand;
-import com.homegpt.api.model.enums.ProductCategory;
-import com.homegpt.api.model.enums.ProjectStatus;
-import com.homegpt.api.repository.GenerationRepository;
-import com.homegpt.api.repository.ProductRepository;
-import com.homegpt.api.repository.ProjectRepository;
-import com.homegpt.api.repository.UserRepository;
+import com.roomix.api.exception.QuotaExceededException;
+import com.roomix.api.exception.ResourceNotFoundException;
+import com.roomix.api.model.dto.request.CreateProjectRequest;
+import com.roomix.api.model.dto.response.GenerationResponse;
+import com.roomix.api.model.dto.response.ProductResponse;
+import com.roomix.api.model.dto.response.ProjectResponse;
+import com.roomix.api.model.entity.Generation;
+import com.roomix.api.model.entity.Project;
+import com.roomix.api.model.entity.User;
+import com.roomix.api.model.enums.PlanType;
+import com.roomix.api.model.enums.ProductBrand;
+import com.roomix.api.model.enums.ProductCategory;
+import com.roomix.api.model.enums.ProjectStatus;
+import com.roomix.api.repository.GenerationRepository;
+import com.roomix.api.repository.ProductRepository;
+import com.roomix.api.repository.ProjectRepository;
+import com.roomix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -199,7 +199,7 @@ public class ProjectService {
                 .build();
     }
 
-    private ProductResponse toProductResponse(com.homegpt.api.model.entity.Product product) {
+    private ProductResponse toProductResponse(com.roomix.api.model.entity.Product product) {
         return ProductResponse.builder()
                 .id(product.getId())
                 .name(product.getName())

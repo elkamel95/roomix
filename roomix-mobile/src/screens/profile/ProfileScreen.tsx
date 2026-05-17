@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView,
 } from 'react-native';
@@ -118,7 +118,7 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Se déconnecter</Text>
       </TouchableOpacity>
 
-      <Text style={styles.version}>HomeGPT AI v1.0.0</Text>
+      <Text style={styles.version}>ROOMIX v1.0.0</Text>
     </ScrollView>
   );
 }

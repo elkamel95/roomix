@@ -1,4 +1,4 @@
-# HomeGPT AI — Mobile
+﻿# ROOMIX — Mobile
 
 Application React Native + Expo pour la décoration d'intérieur par IA.
 
@@ -25,7 +25,7 @@ npx expo start --ios
 
 Copier `.env.example` en `.env` et renseigner :
 ```
-EXPO_PUBLIC_API_URL=https://api.homegpt.ai/api/v1
+EXPO_PUBLIC_API_URL=https://api.roomix.ai/api/v1
 ```
 
 ## Structure

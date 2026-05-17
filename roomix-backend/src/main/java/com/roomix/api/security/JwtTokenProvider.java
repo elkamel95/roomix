@@ -1,4 +1,4 @@
-package com.homegpt.api.security;
+﻿package com.roomix.api.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;

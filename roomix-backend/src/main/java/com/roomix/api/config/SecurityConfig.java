@@ -1,6 +1,6 @@
-package com.homegpt.api.config;
+﻿package com.roomix.api.config;
 
-import com.homegpt.api.security.JwtAuthenticationFilter;
+import com.roomix.api.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

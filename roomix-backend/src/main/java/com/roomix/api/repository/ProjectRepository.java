@@ -1,8 +1,8 @@
-package com.homegpt.api.repository;
+﻿package com.roomix.api.repository;
 
-import com.homegpt.api.model.entity.Project;
-import com.homegpt.api.model.entity.User;
-import com.homegpt.api.model.enums.ProjectStatus;
+import com.roomix.api.model.entity.Project;
+import com.roomix.api.model.entity.User;
+import com.roomix.api.model.enums.ProjectStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

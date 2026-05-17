@@ -1,4 +1,4 @@
-# Architecture Technique — HomeGPT AI
+﻿# Architecture Technique — ROOMIX
 
 ## Vue d'Ensemble
 
@@ -137,5 +137,5 @@ affiliateUrl
 | Env | Backend | Mobile | DB |
 |-----|---------|--------|----|
 | Dev | localhost:8080 | Expo Go | PostgreSQL local |
-| Staging | staging.api.homegpt.ai | Expo EAS | PostgreSQL cloud |
-| Prod | api.homegpt.ai | App Store / Play Store | PostgreSQL managed |
+| Staging | staging.api.roomix.ai | Expo EAS | PostgreSQL cloud |
+| Prod | api.roomix.ai | App Store / Play Store | PostgreSQL managed |

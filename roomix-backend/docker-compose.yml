@@ -1,11 +1,11 @@
-version: '3.8'
+﻿version: '3.8'
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: homegpt-postgres
+    container_name: roomix-postgres
     environment:
-      POSTGRES_DB: homegpt
+      POSTGRES_DB: ROOMIX
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -20,7 +20,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: homegpt-redis
+    container_name: roomix-redis
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes
@@ -29,7 +29,7 @@ services:
 
   backend:
     build: .
-    container_name: homegpt-backend
+    container_name: roomix-backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,7 +38,7 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: homegpt
+      DB_NAME: ROOMIX
       DB_USER: postgres
       DB_PASSWORD: postgres
       REDIS_HOST: redis

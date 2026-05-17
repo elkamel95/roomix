@@ -1,7 +1,7 @@
-package com.homegpt.api.repository;
+﻿package com.roomix.api.repository;
 
-import com.homegpt.api.model.entity.Generation;
-import com.homegpt.api.model.entity.Project;
+import com.roomix.api.model.entity.Generation;
+import com.roomix.api.model.entity.Project;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

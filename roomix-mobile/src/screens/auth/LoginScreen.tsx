@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
@@ -33,7 +33,7 @@ export default function LoginScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.logo}>🏠</Text>
-        <Text style={styles.title}>HomeGPT AI</Text>
+        <Text style={styles.title}>ROOMIX</Text>
         <Text style={styles.subtitle}>Transformez votre intérieur par IA</Text>
       </View>
 

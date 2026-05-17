@@ -1,13 +1,13 @@
-openapi: 3.0.3
+﻿openapi: 3.0.3
 info:
-  title: HomeGPT AI API
+  title: ROOMIX API
   description: API REST pour l'application de décoration d'intérieur par IA
   version: 1.0.0
   contact:
-    email: dev@homegpt.ai
+    email: dev@roomix.ai
 
 servers:
-  - url: https://api.homegpt.ai/api/v1
+  - url: https://api.roomix.ai/api/v1
     description: Production
   - url: http://localhost:8080/api/v1
     description: Development

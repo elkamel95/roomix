@@ -1,7 +1,7 @@
-package com.homegpt.api.security;
+﻿package com.roomix.api.security;
 
-import com.homegpt.api.model.entity.User;
-import com.homegpt.api.repository.UserRepository;
+import com.roomix.api.model.entity.User;
+import com.roomix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;

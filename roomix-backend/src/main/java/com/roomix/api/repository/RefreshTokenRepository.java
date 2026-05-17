@@ -1,7 +1,7 @@
-package com.homegpt.api.repository;
+﻿package com.roomix.api.repository;
 
-import com.homegpt.api.model.entity.RefreshToken;
-import com.homegpt.api.model.entity.User;
+import com.roomix.api.model.entity.RefreshToken;
+import com.roomix.api.model.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

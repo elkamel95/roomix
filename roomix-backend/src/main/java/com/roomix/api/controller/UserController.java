@@ -1,7 +1,7 @@
-package com.homegpt.api.controller;
+﻿package com.roomix.api.controller;
 
-import com.homegpt.api.model.dto.response.UserResponse;
-import com.homegpt.api.repository.UserRepository;
+import com.roomix.api.model.dto.response.UserResponse;
+import com.roomix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

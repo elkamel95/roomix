@@ -1,7 +1,7 @@
-package com.homegpt.api.model.dto.response;
+﻿package com.roomix.api.model.dto.response;
 
-import com.homegpt.api.model.enums.ProductBrand;
-import com.homegpt.api.model.enums.ProductCategory;
+import com.roomix.api.model.enums.ProductBrand;
+import com.roomix.api.model.enums.ProductCategory;
 import lombok.Builder;
 import lombok.Data;
 

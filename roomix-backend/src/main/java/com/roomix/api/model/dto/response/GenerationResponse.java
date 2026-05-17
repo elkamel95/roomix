@@ -1,6 +1,6 @@
-package com.homegpt.api.model.dto.response;
+﻿package com.roomix.api.model.dto.response;
 
-import com.homegpt.api.model.enums.ProjectStatus;
+import com.roomix.api.model.enums.ProjectStatus;
 import lombok.Builder;
 import lombok.Data;
 

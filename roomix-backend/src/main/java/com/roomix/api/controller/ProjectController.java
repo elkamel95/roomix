@@ -1,11 +1,11 @@
-package com.homegpt.api.controller;
+﻿package com.roomix.api.controller;
 
-import com.homegpt.api.model.dto.request.CreateProjectRequest;
-import com.homegpt.api.model.dto.response.GenerationResponse;
-import com.homegpt.api.model.dto.response.ProductResponse;
-import com.homegpt.api.model.dto.response.ProjectResponse;
-import com.homegpt.api.model.enums.ProjectStatus;
-import com.homegpt.api.service.ProjectService;
+import com.roomix.api.model.dto.request.CreateProjectRequest;
+import com.roomix.api.model.dto.response.GenerationResponse;
+import com.roomix.api.model.dto.response.ProductResponse;
+import com.roomix.api.model.dto.response.ProjectResponse;
+import com.roomix.api.model.enums.ProjectStatus;
+import com.roomix.api.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

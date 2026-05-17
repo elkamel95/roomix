@@ -1,11 +1,11 @@
-{
+﻿{
   "expo": {
-    "name": "HomeGPT AI",
-    "slug": "homegpt-ai",
+    "name": "ROOMIX",
+    "slug": "ROOMIX-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "homegpt",
+    "scheme": "ROOMIX",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "ai.homegpt.app",
+      "bundleIdentifier": "ai.roomix.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Pour prendre des photos de votre pièce",
         "NSPhotoLibraryUsageDescription": "Pour importer des photos de votre galerie"
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f0f23"
       },
-      "package": "ai.homegpt.app",
+      "package": "ai.roomix.app",
       "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
     },
     "plugins": [
@@ -34,7 +34,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permettre à HomeGPT d'accéder à vos photos"
+          "photosPermission": "Permettre à ROOMIX d'accéder à vos photos"
         }
       ]
     ],

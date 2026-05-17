@@ -1,6 +1,6 @@
-package com.homegpt.api.service;
+﻿package com.roomix.api.service;
 
-import com.homegpt.api.config.AppProperties;
+import com.roomix.api.config.AppProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

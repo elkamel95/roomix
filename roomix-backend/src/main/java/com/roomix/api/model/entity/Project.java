@@ -1,7 +1,7 @@
-package com.homegpt.api.model.entity;
+﻿package com.roomix.api.model.entity;
 
-import com.homegpt.api.model.enums.DecorationStyle;
-import com.homegpt.api.model.enums.ProjectStatus;
+import com.roomix.api.model.enums.DecorationStyle;
+import com.roomix.api.model.enums.ProjectStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

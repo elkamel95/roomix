@@ -1,9 +1,9 @@
-package com.homegpt.api.controller;
+﻿package com.roomix.api.controller;
 
-import com.homegpt.api.model.dto.request.LoginRequest;
-import com.homegpt.api.model.dto.request.RegisterRequest;
-import com.homegpt.api.model.dto.response.AuthResponse;
-import com.homegpt.api.service.AuthService;
+import com.roomix.api.model.dto.request.LoginRequest;
+import com.roomix.api.model.dto.request.RegisterRequest;
+import com.roomix.api.model.dto.response.AuthResponse;
+import com.roomix.api.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

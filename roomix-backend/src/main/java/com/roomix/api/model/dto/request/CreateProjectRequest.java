@@ -1,6 +1,6 @@
-package com.homegpt.api.model.dto.request;
+﻿package com.roomix.api.model.dto.request;
 
-import com.homegpt.api.model.enums.DecorationStyle;
+import com.roomix.api.model.enums.DecorationStyle;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;

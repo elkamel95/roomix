@@ -1,6 +1,6 @@
-package com.homegpt.api.model.entity;
+﻿package com.roomix.api.model.entity;
 
-import com.homegpt.api.model.enums.AiModel;
+import com.roomix.api.model.enums.AiModel;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

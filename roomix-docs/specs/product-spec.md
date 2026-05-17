@@ -1,4 +1,4 @@
-# Spécification Produit — HomeGPT AI
+﻿# Spécification Produit — ROOMIX
 
 **Version:** 1.0  
 **Date:** 2026-05-17  
@@ -8,7 +8,7 @@
 
 ## 1. Vision Produit
 
-HomeGPT AI permet à tout utilisateur de **transformer visuellement une pièce** via IA générative :
+ROOMIX permet à tout utilisateur de **transformer visuellement une pièce** via IA générative :
 prendre une photo → choisir un style → obtenir un rendu réaliste + liste d'achats.
 
 **Proposition de valeur unique :**
@@ -113,7 +113,7 @@ L'IA détecte automatiquement :
 ### Plan Gratuit
 - 3 générations par jour
 - Qualité standard (512x512)
-- Watermark HomeGPT
+- Watermark ROOMIX
 
 ### Plan Premium — 9,99 €/mois
 - Générations illimitées

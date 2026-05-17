@@ -1,4 +1,4 @@
-# Schéma Base de Données — HomeGPT AI
+﻿# Schéma Base de Données — ROOMIX
 
 ## Diagramme ERD
 
