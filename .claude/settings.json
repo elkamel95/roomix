@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__github__*",
-      "mcp__jira__*"
+      "mcp__jira__*",
+      "PowerShell"
     ]
   },
   "mcpServers": {
