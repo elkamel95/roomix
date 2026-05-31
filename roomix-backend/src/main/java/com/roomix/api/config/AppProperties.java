@@ -12,6 +12,7 @@ public class AppProperties {
     private Quota quota = new Quota();
     private Ai ai = new Ai();
     private Storage storage = new Storage();
+    private Stripe stripe = new Stripe();
 
     /** URL externe du serveur — utilisée pour construire les URLs d'images locales */
     private String serverBaseUrl = "http://localhost:8080";
@@ -51,6 +52,14 @@ public class AppProperties {
             private String visionModel  = "qwen-vl-max";
             private String imageModel   = "wan2.7-image-pro";
         }
+    }
+
+    @Data
+    public static class Stripe {
+        private String secretKey      = "";
+        private String webhookSecret  = "";
+        private String successUrl     = "ROOMIX://payment/success";
+        private String cancelUrl      = "ROOMIX://payment/cancel";
     }
 
     @Data

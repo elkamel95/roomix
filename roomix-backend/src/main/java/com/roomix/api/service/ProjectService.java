@@ -1,5 +1,6 @@
 package com.roomix.api.service;
 
+import com.roomix.api.exception.InsufficientTokensException;
 import com.roomix.api.exception.QuotaExceededException;
 import com.roomix.api.exception.ResourceNotFoundException;
 import com.roomix.api.model.dto.request.CreateProjectRequest;
@@ -47,8 +48,7 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final StorageService storageService;
     private final AiOrchestrationService aiOrchestrationService;
-
-    private static final int FREE_DAILY_LIMIT = 3000;
+    private final TokenCostCalculator tokenCostCalculator;
 
     @Transactional
     public ProjectResponse createProject(String userEmail, MultipartFile image,
@@ -56,14 +56,18 @@ public class ProjectService {
                                          List<MultipartFile> objectImages,
                                          List<String> objectTitles) {
         User user = findUser(userEmail);
-        checkAndIncrementQuota(user);
+        com.roomix.api.model.enums.AiModel aiModel = request.getAiModel() != null
+                ? request.getAiModel() : com.roomix.api.model.enums.AiModel.QWEN;
+        int tokenCost = tokenCostCalculator.calculateCost(
+                aiModel, request.getImageSize(), request.getImageQuality());
+        checkAndDeductTokens(user, tokenCost);
 
         String imageKey = storageService.uploadImage(image, user.getId());
         String imageUrl = storageService.getPublicUrl(imageKey);
 
         // ── Upload des objets de référence ────────────────────────────────────
         List<Map<String, String>> objectRefs = new ArrayList<>();
-        for (int i = 0; i < Math.min(objectImages.size(), 3); i++) {
+        for (int i = 0; i < Math.min(objectImages.size(), 15); i++) {
             MultipartFile objFile  = objectImages.get(i);
             String        objTitle = i < objectTitles.size() ? objectTitles.get(i) : "Objet " + (i + 1);
             try {
@@ -215,22 +219,26 @@ public class ProjectService {
         projectRepository.save(project);
     }
 
-    private void checkAndIncrementQuota(User user) {
-        if (user.getPlan() == PlanType.PREMIUM || user.getPlan() == PlanType.PRO) {
-            return;
+    /**
+     * Vérifie que l'utilisateur a assez de tokens et les déduit atomiquement.
+     * Lance {@link InsufficientTokensException} si le solde est insuffisant.
+     */
+    private void checkAndDeductTokens(User user, int cost) {
+        int balance = user.getTokenBalance() != null ? user.getTokenBalance() : 0;
+        if (balance < cost) {
+            throw new InsufficientTokensException(cost, balance);
         }
+        user.setTokenBalance(balance - cost);
 
+        // Mise à jour du compteur journalier (statistique, non bloquant)
         if (!user.getLastGenerationReset().equals(LocalDate.now())) {
             user.setDailyGenerations(0);
             user.setLastGenerationReset(LocalDate.now());
         }
-
-        if (user.getDailyGenerations() >= FREE_DAILY_LIMIT) {
-            throw new QuotaExceededException("Quota gratuit atteint. Passez en Premium pour générer plus.");
-        }
-
         user.setDailyGenerations(user.getDailyGenerations() + 1);
+
         userRepository.save(user);
+        log.info("Tokens déduits: -{} pour {} (nouveau solde: {})", cost, user.getEmail(), user.getTokenBalance());
     }
 
     private User findUser(String email) {

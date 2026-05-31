@@ -21,6 +21,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -177,7 +178,8 @@ public class OpenAiService {
                                         String quality,
                                         String format,
                                         Integer compression,
-                                        String background) {
+                                        String background,
+                                        List<Map<String, String>> objectRefs) {
         AppProperties.Ai.OpenAi cfg = appProperties.getAi().getOpenai();
 
         if (cfg.getApiKey() == null || cfg.getApiKey().isBlank()) {
@@ -203,6 +205,10 @@ public class OpenAiService {
             @Override public String getFilename() { return "room.png"; }
         };
 
+        // ── Extraction des images de référence (objets importés) ─────────────
+        List<byte[]> refPngList = extractRefImages(objectRefs);
+        log.info("gpt-image-2 — {} image(s) de référence objet", refPngList.size());
+
         // ── Construction de la requête multipart ─────────────────────────────
         MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
         bodyBuilder.part("model",            model);
@@ -212,7 +218,23 @@ public class OpenAiService {
         bodyBuilder.part("quality",          effectiveQuality);
         bodyBuilder.part("output_format",    effectiveFormat);
         bodyBuilder.part("background",       effectiveBackground);
-        bodyBuilder.part("image",            imageResource, MediaType.IMAGE_PNG);
+
+        if (refPngList.isEmpty()) {
+            // Pas de référence — clé simple "image" (comportement original)
+            bodyBuilder.part("image", imageResource, MediaType.IMAGE_PNG);
+        } else {
+            // Avec références — tableau "image[]" : pièce en premier, objets ensuite
+            bodyBuilder.part("image[]", imageResource, MediaType.IMAGE_PNG);
+            for (int i = 0; i < refPngList.size(); i++) {
+                final int idx = i;
+                ByteArrayResource refRes = new ByteArrayResource(refPngList.get(i)) {
+                    @Override public String getFilename() { return "ref_" + idx + ".png"; }
+                };
+                bodyBuilder.part("image[]", refRes, MediaType.IMAGE_PNG);
+            }
+            log.info("gpt-image-2 — envoi {} images au total (1 pièce + {} références)",
+                     1 + refPngList.size(), refPngList.size());
+        }
 
         // output_compression : uniquement pour jpeg et webp (pas png)
         if (!"png".equalsIgnoreCase(effectiveFormat)) {
@@ -276,11 +298,57 @@ public class OpenAiService {
     }
 
     /**
+     * Surcharge sans objectRefs — conservée pour rétrocompatibilité.
+     */
+    public byte[] generateImageToImage(String prompt,
+                                        byte[] imageBytes,
+                                        String size,
+                                        String quality,
+                                        String format,
+                                        Integer compression,
+                                        String background) {
+        return generateImageToImage(prompt, imageBytes, size, quality, format, compression, background, List.of());
+    }
+
+    /**
      * Surcharge sans paramètres de rendu — utilise les valeurs par défaut.
      * Conservée pour rétrocompatibilité.
      */
     public byte[] generateImageToImage(String prompt, byte[] imageBytes) {
-        return generateImageToImage(prompt, imageBytes, "auto", "auto", "jpeg", 85, "auto");
+        return generateImageToImage(prompt, imageBytes, "auto", "auto", "jpeg", 85, "auto", List.of());
+    }
+
+    /**
+     * Extrait les bytes PNG de chaque objet de référence depuis leur imageParam.
+     * imageParam peut être :
+     *   - "data:image/jpeg;base64,..." → décodage base64 + conversion PNG
+     *   - URL http(s) → ignoré en dev (S3 non disponible localement)
+     */
+    private List<byte[]> extractRefImages(List<Map<String, String>> objectRefs) {
+        if (objectRefs == null || objectRefs.isEmpty()) return List.of();
+        List<byte[]> result = new ArrayList<>();
+        for (Map<String, String> ref : objectRefs) {
+            String imageParam = ref.get("imageParam");
+            if (imageParam == null || imageParam.isBlank()) continue;
+            try {
+                if (imageParam.startsWith("data:image")) {
+                    // base64 data URI
+                    int commaIdx = imageParam.indexOf(',');
+                    if (commaIdx < 0) continue;
+                    byte[] decoded = Base64.getDecoder().decode(imageParam.substring(commaIdx + 1));
+                    result.add(convertToPng(decoded));
+                    log.info("Objet référence '{}' → PNG ({} bytes)", ref.get("title"), decoded.length);
+                } else {
+                    // URL publique (prod S3) — ignoré en dev local, à implémenter si besoin
+                    log.debug("Objet référence '{}' via URL ignoré en mode local: {}",
+                              ref.get("title"), imageParam);
+                }
+            } catch (Exception e) {
+                log.warn("Impossible d'extraire l'image de référence '{}': {}",
+                         ref.get("title"), e.getMessage());
+            }
+        }
+        return result;
     }
 
     // ──────────────────────────────────────────────────────────────────────────

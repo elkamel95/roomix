@@ -37,6 +37,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(pd);
     }
 
+    @ExceptionHandler(InsufficientTokensException.class)
+    public ResponseEntity<ProblemDetail> handleInsufficientTokens(InsufficientTokensException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.PAYMENT_REQUIRED, ex.getMessage());
+        pd.setTitle("Tokens insuffisants");
+        pd.setProperty("required",  ex.getRequired());
+        pd.setProperty("available", ex.getAvailable());
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(pd);
+    }
+
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ProblemDetail> handleInvalidToken(InvalidTokenException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());

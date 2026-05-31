@@ -21,6 +21,7 @@ export interface User {
   avatarUrl?: string;
   plan: PlanType;
   planExpiry?: string;
+  tokenBalance: number;
   createdAt: string;
 }
 

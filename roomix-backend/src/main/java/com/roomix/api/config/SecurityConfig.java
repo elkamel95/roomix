@@ -50,6 +50,8 @@ public class SecurityConfig {
                                 "/auth/login",
                                 "/auth/refresh",
                                 "/subscriptions/webhook",
+                                "/payments/webhook",
+                                "/payments/packs",
                                 "/actuator/health",
                                 "/storage/**"
                         ).permitAll()

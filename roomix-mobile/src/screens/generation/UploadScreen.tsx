@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image,
   Alert, ActivityIndicator, ScrollView, TextInput,
@@ -17,6 +17,7 @@ import {
   projectService,
 } from '../../services/projectService';
 import { useProjectStore } from '../../store/slices/projectStore';
+import { useAuthStore } from '../../store/slices/authStore';
 
 // ── Types locaux ──────────────────────────────────────────────────────────────
 
@@ -94,6 +95,34 @@ export default function UploadScreen() {
   const [imageCompression,  setImageCompression]  = useState<number>(85);
   const [imageBackground,   setImageBackground]   = useState<ImageBackground>('auto');
 
+  // ── Token system ──────────────────────────────────────────────────────────
+  const { user } = useAuthStore();
+  const tokenBalance = user?.tokenBalance ?? 0;
+
+  /** Coût estimé en tokens selon la grille tarifaire gpt-image-2 */
+  const estimatedCost = useMemo(() => {
+    if (selectedAi !== 'CHATGPT') return 30; // Qwen/Flux : tarif fixe
+    const isSquare = imageSize === 'auto' || imageSize === '1024x1024';
+    const is4k = imageSize === '3840x2160' || imageSize === '2160x3840';
+    const is2kSquare = imageSize === '2048x2048';
+    const is2kRect = imageSize === '2048x1152' || imageSize === '1152x2048';
+    const effectiveQuality = imageQuality === 'auto' ? 'medium' : imageQuality;
+
+    const COST: Record<string, Record<string, number>> = {
+      low:    { sq1024: 6,   rect1024: 5,   sq2048: 24,  rect2048: 12,  rect4k: 48   },
+      medium: { sq1024: 53,  rect1024: 41,  sq2048: 212, rect2048: 106, rect4k: 424  },
+      high:   { sq1024: 211, rect1024: 165, sq2048: 844, rect2048: 422, rect4k: 1688 },
+    };
+    const row = COST[effectiveQuality] ?? COST.medium;
+    if (is4k)      return row.rect4k;
+    if (is2kSquare) return row.sq2048;
+    if (is2kRect)   return row.rect2048;
+    if (isSquare)   return row.sq1024;
+    return row.rect1024; // 1024×1536 ou 1536×1024
+  }, [selectedAi, imageSize, imageQuality]);
+
+  const hasEnoughTokens = tokenBalance >= estimatedCost;
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   const pickImage = async (fromCamera: boolean) => {
@@ -123,8 +152,8 @@ export default function UploadScreen() {
   // ── Objets de référence ────────────────────────────────────────────────────
 
   const addObjectRef = async () => {
-    if (objectRefs.length >= 3) {
-      Alert.alert('Maximum atteint', '3 objets de référence maximum.');
+    if (objectRefs.length >= 15) {
+      Alert.alert('Maximum atteint', '15 objets de référence maximum.');
       return;
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -346,7 +375,7 @@ export default function UploadScreen() {
       <View style={s.sectionHeader}>
         <Text style={[s.sectionTitle, s.mt24]}>📷 Intégrer des objets</Text>
         {objectRefs.length > 0 && (
-          <Text style={s.refCount}>{objectRefs.length}/3</Text>
+          <Text style={s.refCount}>{objectRefs.length}/15</Text>
         )}
       </View>
       <Text style={s.refHint}>
@@ -370,7 +399,7 @@ export default function UploadScreen() {
         </View>
       ))}
 
-      {objectRefs.length < 3 && (
+      {objectRefs.length < 15 && (
         <TouchableOpacity style={s.refAddBtn} onPress={addObjectRef}>
           <Text style={s.refAddBtnText}>＋ Ajouter un objet</Text>
         </TouchableOpacity>
@@ -404,6 +433,28 @@ export default function UploadScreen() {
             <Text style={s.chatgptTitle}>🤖 Paramètres gpt-image-2</Text>
             <View style={s.chatgptBadge}><Text style={s.chatgptBadgeText}>ChatGPT</Text></View>
           </View>
+
+          {/* ── Solde tokens + coût estimé ── */}
+          <View style={s.tokenRow}>
+            <View style={s.tokenBalance}>
+              <Text style={s.tokenBalanceLabel}>💰 Solde</Text>
+              <Text style={[s.tokenBalanceValue, !hasEnoughTokens && s.tokenBalanceInsuffisant]}>
+                {tokenBalance} tokens
+              </Text>
+            </View>
+            <View style={s.tokenArrow}><Text style={s.tokenArrowText}>→</Text></View>
+            <View style={[s.tokenCost, !hasEnoughTokens && s.tokenCostInsuffisant]}>
+              <Text style={s.tokenCostLabel}>Coût estimé</Text>
+              <Text style={s.tokenCostValue}>{estimatedCost} tokens</Text>
+            </View>
+          </View>
+          {!hasEnoughTokens && (
+            <View style={s.tokenWarning}>
+              <Text style={s.tokenWarningText}>
+                ⚠️ Solde insuffisant — il vous manque {estimatedCost - tokenBalance} tokens
+              </Text>
+            </View>
+          )}
 
           {/* Taille */}
           <Text style={s.subSectionTitle}>📐 Taille</Text>
@@ -844,6 +895,27 @@ const s = StyleSheet.create({
   formatLabelActive:{ color: '#10a37f' },
   formatSub:        { color: '#445', fontSize: 9 },
   bgRow:            { flexDirection: 'row', gap: 8, marginBottom: 4 },
+
+  // ── Token widget ──────────────────────────────────────────────────────────
+  tokenRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0a1a2a',
+    borderRadius: 12, padding: 12, marginBottom: 12, gap: 8,
+  },
+  tokenBalance:      { flex: 1, alignItems: 'center' },
+  tokenBalanceLabel: { color: '#888', fontSize: 10, fontWeight: '700', marginBottom: 2 },
+  tokenBalanceValue: { color: '#10a37f', fontSize: 16, fontWeight: '900' },
+  tokenBalanceInsuffisant: { color: '#EF4444' },
+  tokenArrow:        { alignItems: 'center' },
+  tokenArrowText:    { color: '#555', fontSize: 18 },
+  tokenCost:         { flex: 1, alignItems: 'center', backgroundColor: '#0d2d25', borderRadius: 8, padding: 6 },
+  tokenCostInsuffisant: { backgroundColor: '#2d0d0d' },
+  tokenCostLabel:    { color: '#888', fontSize: 10, fontWeight: '700', marginBottom: 2 },
+  tokenCostValue:    { color: '#10a37f', fontSize: 16, fontWeight: '900' },
+  tokenWarning: {
+    backgroundColor: '#2d1010', borderRadius: 10, padding: 10, marginBottom: 12,
+    borderWidth: 1, borderColor: '#EF4444',
+  },
+  tokenWarningText: { color: '#EF4444', fontSize: 12, fontWeight: '700', textAlign: 'center' },
 
   // Generate button
   generateBtn:          { borderRadius: 16, overflow: 'hidden', marginTop: 32 },
