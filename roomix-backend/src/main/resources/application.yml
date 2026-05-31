@@ -82,7 +82,7 @@ app:
       image-model: ${QWEN_IMAGE_MODEL:wan2.7-image-pro}
 
   stripe:
-    secret-key: ${STRIPE_SECRET_KEY:sk_test_51TdBWaQ5Zjmx1CaZbKcj7qKx6NjYvlLl2giN8K3ebkZOJpUcs8Wai9l2yknHJzDhEezrCe3GsP66dpccVGir0bjR00OXG3oCWg}
+    secret-key: ${STRIPE_SECRET_KEY:}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
     premium-price-id: ${STRIPE_PREMIUM_PRICE_ID:}
     pro-price-id: ${STRIPE_PRO_PRICE_ID:}
