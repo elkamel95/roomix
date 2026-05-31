@@ -69,9 +69,9 @@ export const projectService = {
     if (colorPalette) formData.append('colorPalette', colorPalette);
     if (customNote)   formData.append('customNote',   customNote);
 
-    // Objets de référence (max 3 photos + titres)
+    // Objets de référence (max 15 photos + titres)
     if (objectRefs && objectRefs.length > 0) {
-      objectRefs.slice(0, 3).forEach((ref, i) => {
+      objectRefs.slice(0, 15).forEach((ref, i) => {
         formData.append('objectImages', {
           uri: ref.imageUri, type: 'image/jpeg', name: `object_${i}.jpg`,
         } as unknown as Blob);

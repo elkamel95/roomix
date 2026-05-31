@@ -13,6 +13,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { projectService } from '../../services/projectService';
 import { normalizeImageUrl } from '../../services/api';
 import { useProjectStore } from '../../store/slices/projectStore';
+import { useAuthStore }   from '../../store/slices/authStore';
 import { Product } from '../../types';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ export default function ResultScreen() {
   const router  = useRouter();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const getLocalImageUri = useProjectStore((s) => s.getLocalImageUri);
+  const { refreshUser }  = useAuthStore();
 
   const [containerWidth, setContainerWidth] = useState(windowWidth - CONTENT_PADDING);
   const [sliderValue,    setSliderValue]    = useState(0.5);
@@ -173,6 +175,11 @@ export default function ResultScreen() {
   const isLoading = project?.status === 'PENDING' || project?.status === 'PROCESSING';
   const isDone    = project?.status === 'DONE';
   const isFailed  = project?.status === 'FAILED';
+
+  // Rafraîchir le solde de tokens quand la génération est terminée
+  useEffect(() => {
+    if (isDone) { refreshUser(); }
+  }, [isDone]);
 
   const beforeUri = (project ? getLocalImageUri(project.id) : undefined)
     ?? normalizeImageUrl(project?.originalImageUrl);

@@ -17,5 +17,6 @@ public class UserResponse {
     private String avatarUrl;
     private PlanType plan;
     private LocalDateTime planExpiry;
+    private Integer tokenBalance;
     private LocalDateTime createdAt;
 }

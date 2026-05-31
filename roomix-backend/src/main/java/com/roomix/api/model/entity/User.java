@@ -58,6 +58,11 @@ public class User {
     @Builder.Default
     private LocalDate lastGenerationReset = LocalDate.now();
 
+    /** Solde de tokens (1 token = $0.001). Déduit à chaque génération. */
+    @Column(name = "token_balance", nullable = false)
+    @Builder.Default
+    private Integer tokenBalance = 200;
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;

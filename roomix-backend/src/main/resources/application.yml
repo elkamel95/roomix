@@ -38,7 +38,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 10MB
-      max-request-size: 12MB
+      max-request-size: 80MB
 
 server:
   port: ${PORT:8080}
@@ -82,10 +82,12 @@ app:
       image-model: ${QWEN_IMAGE_MODEL:wan2.7-image-pro}
 
   stripe:
-    secret-key: ${STRIPE_SECRET_KEY:}
+    secret-key: ${STRIPE_SECRET_KEY:sk_test_51TdBWaQ5Zjmx1CaZbKcj7qKx6NjYvlLl2giN8K3ebkZOJpUcs8Wai9l2yknHJzDhEezrCe3GsP66dpccVGir0bjR00OXG3oCWg}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
     premium-price-id: ${STRIPE_PREMIUM_PRICE_ID:}
     pro-price-id: ${STRIPE_PRO_PRICE_ID:}
+    success-url: ${STRIPE_SUCCESS_URL:ROOMIX://payment/success}
+    cancel-url:  ${STRIPE_CANCEL_URL:ROOMIX://payment/cancel}
 
   server-base-url: ${SERVER_URL:http://localhost:8080}
 

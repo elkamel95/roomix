@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User } from '../../types';
 import { authService } from '../../services/authService';
+import { api } from '../../services/api';
 
 interface AuthState {
   user: User | null;
@@ -10,6 +11,7 @@ interface AuthState {
   register: (email: string, password: string, firstName: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
+  refreshUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -43,4 +45,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setUser: (user) => set({ user, isAuthenticated: true }),
+
+  refreshUser: async () => {
+    try {
+      const { data } = await api.get<User>('/users/me');
+      set({ user: data });
+    } catch {
+      // silencieux — on garde l'ancien état si l'appel échoue
+    }
+  },
 }));

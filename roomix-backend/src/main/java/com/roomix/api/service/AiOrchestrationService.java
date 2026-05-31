@@ -181,7 +181,7 @@ public class AiOrchestrationService {
                         structuredAnalysis,
                         project.getStyle(), roomType,
                         project.getColorPalette(), project.getCustomNote(),
-                        project.getObjectRefs());
+                        resolvedRefsForGeneration);
 
                 int wordCount = chatGptPrompt.trim().split("\\s+").length;
                 log.info("ChatGPT prompt d'édition — {} mots:\n{}", wordCount, chatGptPrompt);
@@ -197,7 +197,8 @@ public class AiOrchestrationService {
 
                 byte[] generatedBytes = openAiService.generateImageToImage(
                         chatGptPrompt, imageBytes,
-                        imgSize, imgQuality, imgFormat, imgCompress, imgBackground);
+                        imgSize, imgQuality, imgFormat, imgCompress, imgBackground,
+                        resolvedRefsForGeneration);
                 resultImageUrl = storageService.saveGeneratedImage(
                         generatedBytes, project.getUser().getId());
                 usedModel = AiModel.CHATGPT;
@@ -705,12 +706,20 @@ public class AiOrchestrationService {
         // Préférences supplémentaires
         if (colorPalette != null && !colorPalette.isBlank())
             sb.append("- Color palette: ").append(colorPalette).append("\n");
-        if (objectRefs != null && !objectRefs.isEmpty())
-            for (Map<String, String> ref : objectRefs)
-                sb.append("- Incorporate '").append(ref.getOrDefault("title", "reference object"))
-                  .append("' naturally in the scene\n");
         if (customNote != null && !customNote.isBlank())
             sb.append("- ").append(customNote.trim()).append("\n");
+
+        // ── SECTION 2b : Objets de référence ─────────────────────────────────
+        if (objectRefs != null && !objectRefs.isEmpty()) {
+            sb.append("\nADD THESE SPECIFIC REFERENCE OBJECTS INTO THE SCENE");
+            sb.append(" (visual reference images are provided — match them exactly):\n");
+            for (Map<String, String> ref : objectRefs) {
+                String title = ref.getOrDefault("title", "reference object");
+                sb.append("- Place the exact '").append(title)
+                  .append("' shown in the reference image into the room. ")
+                  .append("Preserve its design, color, material and shape precisely.\n");
+            }
+        }
 
         // ── SECTION 3 : Rendering quality ────────────────────────────────────
         sb.append("\nRENDERING: photorealistic, real-world materials and textures, ")

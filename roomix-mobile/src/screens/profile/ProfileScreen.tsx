@@ -59,7 +59,33 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Quota */}
+      {/* Solde tokens */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Tokens</Text>
+        <View style={styles.tokenCard}>
+          <View style={styles.tokenRow}>
+            <View>
+              <Text style={styles.tokenBalance}>
+                {(user?.tokenBalance ?? 0).toLocaleString('fr-FR')}
+              </Text>
+              <Text style={styles.tokenLabel}>tokens disponibles</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.buyTokensBtn}
+              onPress={() => router.push('/tokens')}
+            >
+              <Text style={styles.buyTokensBtnText}>+ Acheter</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.tokenHint}>
+            <Text style={styles.tokenHintText}>
+              💡 ChatGPT Medium ≈ 53 tokens · Low ≈ 6 tokens · High ≈ 211 tokens · Wan2.7/Flux ≈ 30 tokens
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Quota journalier */}
       {quota && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Générations aujourd'hui</Text>
@@ -67,11 +93,9 @@ export default function ProfileScreen() {
             <View style={styles.quotaNumbers}>
               <Text style={styles.quotaUsed}>{quota.dailyUsed}</Text>
               <Text style={styles.quotaSeparator}>/</Text>
-              <Text style={styles.quotaLimit}>{quota.dailyLimit === -1 ? '∞' : quota.dailyLimit}</Text>
+              <Text style={styles.quotaLimit}>∞</Text>
             </View>
-            <Text style={styles.quotaLabel}>
-              {quota.remaining === 2147483647 ? 'Illimité' : `${quota.remaining} restantes`}
-            </Text>
+            <Text style={styles.quotaLabel}>générations ce jour</Text>
           </View>
         </View>
       )}
@@ -143,6 +167,19 @@ const styles = StyleSheet.create({
   quotaSeparator: { color: '#555', fontSize: 32 },
   quotaLimit: { color: '#555', fontSize: 32, fontWeight: '600' },
   quotaLabel: { color: '#888', fontSize: 14, marginTop: 4 },
+
+  // ── Token widget ────────────────────────────────────────────────────────────
+  tokenCard: { backgroundColor: '#1a1a3e', borderRadius: 16, padding: 20 },
+  tokenRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  tokenBalance: { color: '#A78BFA', fontSize: 40, fontWeight: '900' },
+  tokenLabel:   { color: '#888', fontSize: 13, marginTop: 2 },
+  buyTokensBtn: {
+    backgroundColor: '#7C3AED', borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  buyTokensBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  tokenHint:    { backgroundColor: '#12122e', borderRadius: 8, padding: 10 },
+  tokenHintText: { color: '#666', fontSize: 11, lineHeight: 16 },
   upgradeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2d1b69', borderRadius: 16, padding: 16, marginBottom: 20, gap: 12, borderWidth: 1, borderColor: '#7C3AED' },
   upgradeEmoji: { fontSize: 32 },
   upgradeInfo: { flex: 1 },
