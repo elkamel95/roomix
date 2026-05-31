@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Project, STYLE_OPTIONS } from '../../types';
+import { normalizeImageUrl } from '../../services/api';
 
 interface Props {
   project: Project;
@@ -30,9 +31,9 @@ export default function ProjectCard({ project, onPress }: Props) {
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.imageContainer}>
         {project.generation?.resultImageUrl ? (
-          <Image source={{ uri: project.generation.resultImageUrl }} style={styles.image} />
+          <Image source={{ uri: normalizeImageUrl(project.generation.resultImageUrl)! }} style={styles.image} />
         ) : (
-          <Image source={{ uri: project.originalImageUrl }} style={[styles.image, styles.imageOriginal]} />
+          <Image source={{ uri: normalizeImageUrl(project.originalImageUrl)! }} style={[styles.image, styles.imageOriginal]} />
         )}
         <View style={[styles.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />

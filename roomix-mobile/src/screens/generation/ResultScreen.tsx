@@ -1,201 +1,621 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
-  ActivityIndicator, ScrollView, Animated, Alert, Linking,
+  ActivityIndicator, ScrollView, Alert, Linking,
+  PanResponder, Modal, StatusBar, useWindowDimensions, Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 import { projectService } from '../../services/projectService';
+import { normalizeImageUrl } from '../../services/api';
+import { useProjectStore } from '../../store/slices/projectStore';
 import { Product } from '../../types';
+
+// ── Constantes ─────────────────────────────────────────────────────────────────
+
+const COMPARISON_HEIGHT = 320;
+const CONTENT_PADDING   = 40;
+
+const LOADING_STEPS = [
+  { key: 'analyze', label: 'Analyse de la pièce',    emoji: '🔍' },
+  { key: 'style',   label: 'Application du style',   emoji: '🎨' },
+  { key: 'render',  label: 'Rendu photorealistic',    emoji: '✨' },
+  { key: 'finish',  label: 'Finalisation',            emoji: '🏁' },
+];
+
+const LOADING_TIPS = [
+  '💡 Un bon éclairage naturel améliore les résultats de 30%',
+  '🛋️ Photographiez la pièce depuis un angle légèrement en hauteur',
+  '🎨 Les styles Japandi et Scandinavian donnent les meilleurs résultats',
+  '📐 Essayez différents styles sur la même photo pour comparer',
+  '🌿 Ajouter des plantes rend toujours une pièce plus vivante',
+  '💰 Le budget Premium donne des suggestions Roche Bobois et B&B Italia',
+];
+
+// ── Composant LoadingScreen ────────────────────────────────────────────────────
+
+function LoadingScreen({ status }: { status: 'PENDING' | 'PROCESSING' }) {
+  const [tipIndex,  setTipIndex]  = useState(0);
+  const [stepIndex, setStepIndex] = useState(0);
+  const dotAnim = useRef(new Animated.Value(0)).current;
+
+  // Animation pulsation du cercle principal
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(dotAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(dotAnim, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  // Rotation des tips toutes les 4s
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTipIndex(i => (i + 1) % LOADING_TIPS.length);
+    }, 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Avancement des étapes
+  useEffect(() => {
+    if (status === 'PENDING') { setStepIndex(0); return; }
+    setStepIndex(1);
+    const intervals = [
+      setTimeout(() => setStepIndex(2), 8000),
+      setTimeout(() => setStepIndex(3), 30000),
+    ];
+    return () => intervals.forEach(clearTimeout);
+  }, [status]);
+
+  const pulseScale = dotAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+
+  return (
+    <View style={ls.wrapper}>
+      {/* Cercle animé */}
+      <Animated.View style={[ls.circle, { transform: [{ scale: pulseScale }] }]}>
+        <LinearGradient colors={['#9B5DEA', '#6D28D9']} style={ls.circleGradient}>
+          <Text style={ls.circleEmoji}>✨</Text>
+        </LinearGradient>
+      </Animated.View>
+
+      <Text style={ls.title}>L'IA transforme votre pièce</Text>
+      <Text style={ls.sub}>
+        {status === 'PENDING' ? 'En attente de traitement…' : 'Génération en cours (1–3 min)'}
+      </Text>
+
+      {/* Étapes */}
+      <View style={ls.steps}>
+        {LOADING_STEPS.map((step, i) => {
+          const done    = i < stepIndex;
+          const current = i === stepIndex;
+          return (
+            <View key={step.key} style={ls.stepRow}>
+              <View style={[ls.stepDot, done && ls.stepDotDone, current && ls.stepDotActive]}>
+                {done
+                  ? <Text style={ls.stepCheck}>✓</Text>
+                  : current
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <View style={ls.stepDotInner} />
+                }
+              </View>
+              <Text style={[ls.stepLabel, done && ls.stepLabelDone, current && ls.stepLabelActive]}>
+                {step.emoji} {step.label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Tip rotatif */}
+      <View style={ls.tipBox}>
+        <Text style={ls.tipText}>{LOADING_TIPS[tipIndex]}</Text>
+      </View>
+
+      <Text style={ls.hint}>L'écran se met à jour automatiquement</Text>
+    </View>
+  );
+}
+
+// ── Screen principal ───────────────────────────────────────────────────────────
 
 export default function ResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
-  const [sliderValue, setSliderValue] = useState(0.5);
-  const sliderAnim = useRef(new Animated.Value(0.5)).current;
+  const router  = useRouter();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const getLocalImageUri = useProjectStore((s) => s.getLocalImageUri);
 
-  const { data: project, refetch } = useQuery({
+  const [containerWidth, setContainerWidth] = useState(windowWidth - CONTENT_PADDING);
+  const [sliderValue,    setSliderValue]    = useState(0.5);
+  const [isSaving,       setIsSaving]       = useState(false);
+  const [isSharing,      setIsSharing]      = useState(false);
+  const [fullscreenUri,  setFullscreenUri]  = useState<string | null>(null);
+
+  const startSliderRef   = useRef(0.5);
+  const containerWRef    = useRef(windowWidth - CONTENT_PADDING);
+
+  // ── Slider PanResponder ───────────────────────────────────────────────────
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder:  () => true,
+      onPanResponderGrant: () => {
+        setSliderValue(v => { startSliderRef.current = v; return v; });
+      },
+      onPanResponderMove: (_, { dx }) => {
+        const w = containerWRef.current;
+        if (w <= 0) return;
+        setSliderValue(Math.min(1, Math.max(0, startSliderRef.current + dx / w)));
+      },
+    })
+  ).current;
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+  const { data: project } = useQuery({
     queryKey: ['project', id],
-    queryFn: () => projectService.getProject(id),
-    refetchInterval: (data) =>
-      data?.status === 'PROCESSING' || data?.status === 'PENDING' ? 3000 : false,
+    queryFn:  () => projectService.getProject(id),
+    refetchInterval: (query) => {
+      const s = (query.state.data as any)?.status;
+      return s === 'PROCESSING' || s === 'PENDING' ? 3000 : false;
+    },
   });
 
   const { data: products } = useQuery({
     queryKey: ['products', id],
-    queryFn: () => projectService.getProducts(id),
-    enabled: project?.status === 'DONE',
+    queryFn:  () => projectService.getProducts(id),
+    enabled:  project?.status === 'DONE',
   });
 
   const isLoading = project?.status === 'PENDING' || project?.status === 'PROCESSING';
-  const isDone = project?.status === 'DONE';
-  const isFailed = project?.status === 'FAILED';
+  const isDone    = project?.status === 'DONE';
+  const isFailed  = project?.status === 'FAILED';
 
-  const handleShare = async () => {
-    if (!project?.generation?.resultImageUrl) return;
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(project.generation.resultImageUrl);
+  const beforeUri = (project ? getLocalImageUri(project.id) : undefined)
+    ?? normalizeImageUrl(project?.originalImageUrl);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  const handleSave = async () => {
+    const imageUrl = normalizeImageUrl(project?.generation?.resultImageUrl);
+    if (!imageUrl) return;
+
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission refusée', "Autorisez l'accès à la galerie dans les paramètres.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const filename = 'roomix_' + Date.now() + '.jpg';
+      const localUri = FileSystem.cacheDirectory + filename;
+      const { uri } = await FileSystem.downloadAsync(imageUrl, localUri);
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert('✅ Sauvegardé !', 'La décoration a été ajoutée à votre galerie.');
+    } catch (err: any) {
+      Alert.alert('Erreur', err?.message ?? 'Impossible de sauvegarder.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  const handleShare = async () => {
+    const imageUrl = normalizeImageUrl(project?.generation?.resultImageUrl);
+    if (!imageUrl) return;
+
+    const available = await Sharing.isAvailableAsync();
+    if (!available) {
+      Alert.alert('Partage indisponible', "Le partage n'est pas supporté sur cet appareil.");
+      return;
+    }
+
+    setIsSharing(true);
+    try {
+      const filename = 'roomix_' + Date.now() + '.jpg';
+      const localUri = FileSystem.cacheDirectory + filename;
+      const { uri } = await FileSystem.downloadAsync(imageUrl, localUri);
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/jpeg',
+        dialogTitle: '✨ Ma déco Roomix',
+      });
+    } catch (err: any) {
+      Alert.alert('Erreur', err?.message ?? 'Impossible de partager.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleRegenerate = () => {
+    Alert.alert(
+      '🔄 Régénérer',
+      'Relancer la génération avec les mêmes paramètres ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Régénérer', onPress: () => router.back() },
+      ]
+    );
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   if (!project) {
     return (
-      <View style={styles.center}>
+      <View style={s.center}>
         <ActivityIndicator color="#7C3AED" size="large" />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backText}>← Retour</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>{project.name}</Text>
-      <Text style={styles.styleBadge}>{project.style.replace('_', ' ')}</Text>
-
-      {/* Zone image */}
-      {isLoading && (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator color="#7C3AED" size="large" />
-          <Text style={styles.loadingText}>L'IA transforme votre pièce...</Text>
-          <Text style={styles.loadingSubtext}>Environ 30-45 secondes</Text>
+    <ScrollView
+      style={s.container}
+      contentContainerStyle={s.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <Text style={s.backText}>←</Text>
+        </TouchableOpacity>
+        <View style={s.headerCenter}>
+          <Text style={s.title} numberOfLines={1}>{project.name}</Text>
+          <Text style={s.styleBadge}>{project.style.replace(/_/g, ' ')}</Text>
         </View>
+        {isDone && (
+          <TouchableOpacity style={s.regenBtn} onPress={handleRegenerate}>
+            <Text style={s.regenText}>🔄</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Chargement ───────────────────────────────── */}
+      {isLoading && (
+        <LoadingScreen status={project.status as 'PENDING' | 'PROCESSING'} />
       )}
 
+      {/* ── Erreur ───────────────────────────────────── */}
       {isFailed && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorEmoji}>❌</Text>
-          <Text style={styles.errorText}>Génération échouée</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
-            <Text style={styles.retryText}>Réessayer</Text>
+        <View style={s.errorBox}>
+          <Text style={s.errorEmoji}>❌</Text>
+          <Text style={s.errorTitle}>Génération échouée</Text>
+          {project.generation?.errorMessage && (
+            <Text style={s.errorDetail}>{project.generation.errorMessage}</Text>
+          )}
+          <TouchableOpacity style={s.retryBtn} onPress={() => router.back()}>
+            <Text style={s.retryText}>← Réessayer</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {isDone && project.generation?.resultImageUrl && (
-        <View>
-          {/* Avant / Après slider */}
-          <View style={styles.comparisonContainer}>
-            <Image source={{ uri: project.originalImageUrl }} style={styles.comparisonImage} />
-            <View style={[styles.afterOverlay, { width: `${sliderValue * 100}%` as any }]}>
+      {/* ── Résultat ─────────────────────────────────── */}
+      {isDone && project.generation?.resultImageUrl && (() => {
+        const afterUri = normalizeImageUrl(project.generation!.resultImageUrl)!;
+        return (
+          <>
+            {/* Slider Avant / Après */}
+            <View
+              style={s.slider}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                if (w > 0) { setContainerWidth(w); containerWRef.current = w; }
+              }}
+              {...panResponder.panHandlers}
+            >
+              {/* Après — fond */}
               <Image
-                source={{ uri: project.generation.resultImageUrl }}
-                style={styles.comparisonImage}
+                source={{ uri: afterUri }}
+                style={[StyleSheet.absoluteFill, { width: containerWidth, height: COMPARISON_HEIGHT }]}
+                resizeMode="cover"
               />
-            </View>
-            <View style={[styles.sliderHandle, { left: `${sliderValue * 100}%` as any }]}>
-              <View style={styles.sliderLine} />
-              <View style={styles.sliderCircle}>
-                <Text style={styles.sliderArrows}>◀ ▶</Text>
+              {/* Avant — clippé */}
+              <View style={{
+                position: 'absolute', top: 0, left: 0,
+                width: Math.round(containerWidth * sliderValue),
+                height: COMPARISON_HEIGHT, overflow: 'hidden',
+              }}>
+                <Image
+                  source={{ uri: beforeUri }}
+                  style={{ position: 'absolute', top: 0, left: 0, width: containerWidth, height: COMPARISON_HEIGHT }}
+                  resizeMode="cover"
+                />
+              </View>
+              {/* Séparateur */}
+              <View style={{
+                position: 'absolute', top: 0,
+                left: Math.round(containerWidth * sliderValue) - 1,
+                width: 2, height: COMPARISON_HEIGHT, alignItems: 'center',
+              }}>
+                <View style={s.sliderLine} />
+                <View style={s.sliderHandle}>
+                  <Text style={s.sliderHandleText}>◀▶</Text>
+                </View>
+              </View>
+              {/* Labels superposés */}
+              <View style={s.sliderLabelLeft}>
+                <Text style={s.sliderLabel}>Avant</Text>
+              </View>
+              <View style={s.sliderLabelRight}>
+                <Text style={s.sliderLabel}>Après</Text>
               </View>
             </View>
-          </View>
 
-          <View style={styles.labels}>
-            <Text style={styles.label}>Avant</Text>
-            <Text style={styles.label}>Après</Text>
-          </View>
+            {/* Hint + zoom */}
+            <View style={s.sliderFooter}>
+              <Text style={s.sliderHint}>◀ Glissez pour comparer ▶</Text>
+              <TouchableOpacity onPress={() => setFullscreenUri(afterUri)}>
+                <Text style={s.zoomBtn}>🔍 Plein écran</Text>
+              </TouchableOpacity>
+            </View>
 
-          {/* Actions */}
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
-              <Text style={styles.actionBtnText}>📤 Partager</Text>
-            </TouchableOpacity>
+            {/* Actions */}
+            <View style={s.actions}>
+              {/* Sauvegarder */}
+              <TouchableOpacity
+                style={[s.actionBtn, s.actionSave, isSaving && s.actionDisabled]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={s.actionText}>💾 Sauvegarder</Text>
+                }
+              </TouchableOpacity>
+
+              {/* Partager */}
+              <TouchableOpacity
+                style={[s.actionBtn, s.actionShare, isSharing && s.actionDisabled]}
+                onPress={handleShare}
+                disabled={isSharing}
+              >
+                {isSharing
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={s.actionText}>📤 Partager</Text>
+                }
+              </TouchableOpacity>
+            </View>
+
+            {/* Bouton acheter */}
             <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnSecondary]}
-              onPress={() => router.push(`/products/${id}`)}
+              style={s.shopBtn}
+              onPress={() => router.push(`/products/${id}` as any)}
             >
-              <Text style={styles.actionBtnText}>🛒 Acheter les meubles</Text>
+              <LinearGradient
+                colors={['#1a1a3e', '#2d1b69']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={s.shopBtnGradient}
+              >
+                <Text style={s.shopBtnText}>🛒 Voir les meubles &amp; produits</Text>
+                <Text style={s.shopBtnArrow}>›</Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
-        </View>
-      )}
+          </>
+        );
+      })()}
 
-      {/* Products section */}
+      {/* ── Produits ─────────────────────────────────── */}
       {isDone && products && products.length > 0 && (
-        <View style={styles.productsSection}>
-          <Text style={styles.productsTitle}>🛍️ Produits utilisés</Text>
+        <View style={s.productsSection}>
+          <Text style={s.productsTitle}>🛍️ Produits suggérés</Text>
           {products.map((product: Product) => (
             <TouchableOpacity
               key={product.id}
-              style={styles.productCard}
+              style={s.productCard}
               onPress={() => product.affiliateUrl && Linking.openURL(product.affiliateUrl)}
             >
-              <View style={styles.productInfo}>
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productBrand}>{product.brand}</Text>
+              <View style={s.productInfo}>
+                <Text style={s.productName}>{product.name}</Text>
+                <Text style={s.productBrand}>{product.brand}</Text>
               </View>
-              <View style={styles.productPriceBox}>
-                <Text style={styles.productPrice}>
-                  {product.price ? `${product.price} €` : 'Prix N/A'}
+              <View style={s.productRight}>
+                <Text style={s.productPrice}>
+                  {product.price ? `${product.price} €` : '—'}
                 </Text>
-                <Text style={styles.productLink}>Voir →</Text>
+                <Text style={s.productLink}>Voir →</Text>
               </View>
             </TouchableOpacity>
           ))}
 
-          {products.length > 0 && (
-            <View style={styles.totalBox}>
-              <Text style={styles.totalLabel}>Total estimé</Text>
-              <Text style={styles.totalPrice}>
-                {products.reduce((sum, p) => sum + (p.price ?? 0), 0).toFixed(0)} €
-              </Text>
-            </View>
-          )}
+          <View style={s.totalBox}>
+            <Text style={s.totalLabel}>💰 Budget estimé</Text>
+            <Text style={s.totalPrice}>
+              {products.reduce((sum, p) => sum + (p.price ?? 0), 0).toFixed(0)} €
+            </Text>
+          </View>
         </View>
       )}
+
+      {/* Modal plein écran */}
+      <Modal
+        visible={fullscreenUri !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenUri(null)}
+        statusBarTranslucent
+      >
+        <View style={s.modalOverlay}>
+          <StatusBar hidden />
+          <TouchableOpacity style={s.modalClose} onPress={() => setFullscreenUri(null)}>
+            <Text style={s.modalCloseText}>✕</Text>
+          </TouchableOpacity>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={s.modalContent}
+            maximumZoomScale={4}
+            minimumZoomScale={1}
+            bouncesZoom
+            centerContent
+          >
+            {fullscreenUri && (
+              <Image
+                source={{ uri: fullscreenUri }}
+                style={{ width: windowWidth, height: windowHeight * 0.9, resizeMode: 'contain' }}
+              />
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+// ── Styles Loading ─────────────────────────────────────────────────────────────
+
+const ls = StyleSheet.create({
+  wrapper: {
+    backgroundColor: '#1a1a3e', borderRadius: 20, padding: 28,
+    alignItems: 'center', gap: 20, marginTop: 8,
+  },
+  circle: {
+    width: 96, height: 96, borderRadius: 48, overflow: 'hidden',
+    shadowColor: '#9B5DEA', shadowOpacity: 0.6, shadowRadius: 20,
+    shadowOffset: { width: 0, height: 0 }, elevation: 12,
+  },
+  circleGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  circleEmoji:    { fontSize: 42 },
+  title:          { color: '#fff', fontSize: 18, fontWeight: '800' },
+  sub:            { color: '#888', fontSize: 13, marginTop: -8 },
+
+  steps: { width: '100%', gap: 12 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepDot: {
+    width: 28, height: 28, borderRadius: 14, backgroundColor: '#252550',
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#3a3a6e',
+  },
+  stepDotActive:  { borderColor: '#9B5DEA', backgroundColor: '#3d1b6e' },
+  stepDotDone:    { borderColor: '#22c55e', backgroundColor: '#14532d' },
+  stepDotInner:   { width: 8, height: 8, borderRadius: 4, backgroundColor: '#444' },
+  stepCheck:      { color: '#22c55e', fontSize: 13, fontWeight: '800' },
+  stepLabel:      { color: '#666', fontSize: 13, fontWeight: '600' },
+  stepLabelActive:{ color: '#fff' },
+  stepLabelDone:  { color: '#22c55e' },
+
+  tipBox: {
+    backgroundColor: '#252550', borderRadius: 12, padding: 14,
+    width: '100%', borderLeftWidth: 3, borderLeftColor: '#7C3AED',
+  },
+  tipText: { color: '#ccc', fontSize: 12, lineHeight: 18 },
+  hint:    { color: '#444', fontSize: 11 },
+});
+
+// ── Styles Screen ──────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f0f23' },
-  content: { padding: 20, paddingTop: 56 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f0f23' },
-  backBtn: { marginBottom: 16 },
-  backText: { color: '#7C3AED', fontSize: 16, fontWeight: '600' },
-  title: { fontSize: 24, fontWeight: '800', color: '#fff', marginBottom: 6 },
-  styleBadge: { color: '#7C3AED', fontWeight: '700', fontSize: 13, marginBottom: 20, textTransform: 'uppercase' },
-  loadingBox: { backgroundColor: '#1a1a3e', borderRadius: 16, padding: 40, alignItems: 'center', gap: 12 },
-  loadingText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  loadingSubtext: { color: '#888', fontSize: 13 },
-  errorBox: { backgroundColor: '#2a1a1a', borderRadius: 16, padding: 32, alignItems: 'center', gap: 12 },
-  errorEmoji: { fontSize: 48 },
-  errorText: { color: '#ff6b6b', fontSize: 16, fontWeight: '700' },
-  retryBtn: { backgroundColor: '#7C3AED', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
-  retryText: { color: '#fff', fontWeight: '700' },
-  comparisonContainer: { width: '100%', height: 280, borderRadius: 16, overflow: 'hidden', position: 'relative' },
-  comparisonImage: { width: '100%', height: '100%', position: 'absolute' },
-  afterOverlay: { position: 'absolute', top: 0, left: 0, height: '100%', overflow: 'hidden' },
-  sliderHandle: { position: 'absolute', top: 0, height: '100%', alignItems: 'center' },
-  sliderLine: { width: 2, flex: 1, backgroundColor: '#fff' },
-  sliderCircle: { position: 'absolute', top: '45%', backgroundColor: '#7C3AED', borderRadius: 20, padding: 8 },
-  sliderArrows: { color: '#fff', fontSize: 12 },
-  labels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, marginBottom: 20 },
-  label: { color: '#888', fontSize: 12 },
-  actions: { gap: 10, marginBottom: 24 },
-  actionBtn: { backgroundColor: '#7C3AED', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  actionBtnSecondary: { backgroundColor: '#1a1a3e', borderWidth: 1, borderColor: '#7C3AED' },
-  actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  productsSection: { marginTop: 8 },
-  productsTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 14 },
+  content:   { padding: 20, paddingTop: 54, paddingBottom: 50 },
+  center:    { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f0f23' },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#1a1a3e',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  backText:     { color: '#fff', fontSize: 18, fontWeight: '700' },
+  headerCenter: { flex: 1 },
+  title:        { fontSize: 18, fontWeight: '800', color: '#fff' },
+  styleBadge:   { color: '#7C3AED', fontWeight: '700', fontSize: 11, textTransform: 'uppercase', marginTop: 2 },
+  regenBtn: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#1a1a3e',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  regenText: { fontSize: 18 },
+
+  // Error
+  errorBox:   { backgroundColor: '#2a1a1a', borderRadius: 20, padding: 32, alignItems: 'center', gap: 14 },
+  errorEmoji: { fontSize: 52 },
+  errorTitle: { color: '#ff6b6b', fontSize: 18, fontWeight: '800' },
+  errorDetail:{ color: '#cc8888', fontSize: 12, textAlign: 'center' },
+  retryBtn:   { backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+  retryText:  { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  // Slider
+  slider: {
+    width: '100%', height: COMPARISON_HEIGHT,
+    borderRadius: 18, overflow: 'hidden', backgroundColor: '#111',
+  },
+  sliderLine:   { width: 2, height: COMPARISON_HEIGHT, backgroundColor: 'rgba(255,255,255,0.9)' },
+  sliderHandle: {
+    position: 'absolute', top: COMPARISON_HEIGHT / 2 - 22,
+    backgroundColor: '#7C3AED', borderRadius: 22,
+    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#7C3AED', shadowOpacity: 0.8, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 }, elevation: 8,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+  },
+  sliderHandleText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  sliderLabelLeft: {
+    position: 'absolute', bottom: 10, left: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  sliderLabelRight: {
+    position: 'absolute', bottom: 10, right: 10,
+    backgroundColor: 'rgba(124,58,237,0.7)', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  sliderLabel: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  sliderFooter: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginTop: 8, marginBottom: 18,
+  },
+  sliderHint: { color: '#555', fontSize: 12 },
+  zoomBtn:    { color: '#7C3AED', fontSize: 13, fontWeight: '700' },
+
+  // Actions
+  actions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  actionBtn: {
+    flex: 1, borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  actionSave:    { backgroundColor: '#1a1a3e', borderWidth: 1.5, borderColor: '#22c55e' },
+  actionShare:   { backgroundColor: '#7C3AED' },
+  actionDisabled:{ opacity: 0.5 },
+  actionText:    { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  shopBtn: { borderRadius: 14, overflow: 'hidden', marginBottom: 28 },
+  shopBtnGradient: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
+  },
+  shopBtnText:  { color: '#fff', fontWeight: '700', fontSize: 15 },
+  shopBtnArrow: { color: '#7C3AED', fontSize: 22, fontWeight: '800' },
+
+  // Products
+  productsSection: { marginTop: 4 },
+  productsTitle:   { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 12 },
   productCard: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#1a1a3e', borderRadius: 12, padding: 14, marginBottom: 8,
+    backgroundColor: '#1a1a3e', borderRadius: 14, padding: 14, marginBottom: 8,
+    borderWidth: 1, borderColor: '#2a2a5e',
   },
-  productInfo: { flex: 1 },
-  productName: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  productBrand: { color: '#888', fontSize: 12, marginTop: 2 },
-  productPriceBox: { alignItems: 'flex-end' },
-  productPrice: { color: '#7C3AED', fontWeight: '800', fontSize: 16 },
-  productLink: { color: '#888', fontSize: 12 },
+  productInfo:  { flex: 1 },
+  productName:  { color: '#fff', fontWeight: '600', fontSize: 14 },
+  productBrand: { color: '#666', fontSize: 11, marginTop: 2 },
+  productRight: { alignItems: 'flex-end' },
+  productPrice: { color: '#9B5DEA', fontWeight: '800', fontSize: 16 },
+  productLink:  { color: '#555', fontSize: 11 },
+
   totalBox: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#2d1b69', borderRadius: 12, padding: 16, marginTop: 4, marginBottom: 32,
+    backgroundColor: '#2d1b69', borderRadius: 14, padding: 18,
+    marginTop: 4, marginBottom: 32,
   },
-  totalLabel: { color: '#ccc', fontSize: 15, fontWeight: '600' },
-  totalPrice: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  totalLabel: { color: '#ccc', fontSize: 14, fontWeight: '600' },
+  totalPrice: { color: '#fff', fontSize: 24, fontWeight: '800' },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: '#000' },
+  modalClose: {
+    position: 'absolute', top: 50, right: 20, zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 20,
+    width: 42, height: 42, justifyContent: 'center', alignItems: 'center',
+  },
+  modalCloseText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  modalContent:   { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });

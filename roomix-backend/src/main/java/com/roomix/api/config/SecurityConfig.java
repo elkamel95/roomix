@@ -50,7 +50,8 @@ public class SecurityConfig {
                                 "/auth/login",
                                 "/auth/refresh",
                                 "/subscriptions/webhook",
-                                "/actuator/health"
+                                "/actuator/health",
+                                "/storage/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -62,7 +63,20 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+
+        // Origines explicites configurées
+        List<String> origins = new java.util.ArrayList<>(
+                Arrays.asList(allowedOrigins.split(",")));
+        // Autoriser toutes les origines du réseau local (Expo Go / dev mobile)
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "exp://localhost:*",
+                "http://192.168.*.*:*",
+                "exp://192.168.*.*:*",
+                "http://10.*.*.*:*",
+                "exp://10.*.*.*:*"
+        ));
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

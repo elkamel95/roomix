@@ -13,6 +13,9 @@ public class AppProperties {
     private Ai ai = new Ai();
     private Storage storage = new Storage();
 
+    /** URL externe du serveur — utilisée pour construire les URLs d'images locales */
+    private String serverBaseUrl = "http://localhost:8080";
+
     @Data
     public static class Quota {
         private int freeDailyLimit = 3;
@@ -23,6 +26,7 @@ public class AppProperties {
     public static class Ai {
         private OpenAi openai = new OpenAi();
         private Replicate replicate = new Replicate();
+        private Qwen qwen = new Qwen();
 
         @Data
         public static class OpenAi {
@@ -38,6 +42,14 @@ public class AppProperties {
             private String baseUrl;
             private String sdxlVersion;
             private String fluxVersion;
+        }
+
+        @Data
+        public static class Qwen {
+            private String apiKey;
+            private String baseUrl      = "https://dashscope-intl.aliyuncs.com/api/v1";
+            private String visionModel  = "qwen-vl-max";
+            private String imageModel   = "wan2.7-image-pro";
         }
     }
 

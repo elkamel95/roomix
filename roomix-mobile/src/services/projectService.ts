@@ -1,28 +1,88 @@
 import { api } from './api';
-import { DecorationStyle, Generation, PageResponse, Product, Project, ProjectStatus } from '../types';
+import {
+  ColorPalette, DecorationStyle, Generation, PageResponse,
+  Product, Project, ProjectStatus, RoomType,
+} from '../types';
+
+export interface ObjectRef {
+  id: string;
+  title: string;
+  imageUri: string;
+}
+
+export type PromptMode = 'CREATIVE' | 'PRO' | 'CHAIN';
+
+// ── Paramètres de rendu gpt-image-2 (ChatGPT uniquement) ─────────────────────
+export type ImageSize =
+  | 'auto'
+  | '1024x1024'
+  | '1536x1024'
+  | '1024x1536'
+  | '2048x2048'
+  | '2048x1152'
+  | '3840x2160'
+  | '2160x3840';
+
+export type ImageQuality    = 'auto' | 'low' | 'medium' | 'high';
+export type ImageFormat     = 'jpeg' | 'png' | 'webp';
+export type ImageBackground = 'auto' | 'opaque';
+
+export interface CreateProjectParams {
+  imageUri: string;
+  style: DecorationStyle;
+  aiModel?: 'QWEN' | 'FLUX' | 'CHATGPT' | 'SDXL';
+  promptMode?: PromptMode;
+  name?: string;
+  roomType?: RoomType;
+  colorPalette?: ColorPalette;
+  customNote?: string;
+  objectRefs?: ObjectRef[];
+  // Paramètres de rendu (gpt-image-2 / ChatGPT uniquement)
+  imageSize?:        ImageSize;
+  imageQuality?:     ImageQuality;
+  imageFormat?:      ImageFormat;
+  imageCompression?: number;       // 0-100, pour jpeg/webp uniquement
+  imageBackground?:  ImageBackground;
+}
 
 export const projectService = {
-  async createProject(
-    imageUri: string,
-    style: DecorationStyle,
-    name?: string,
-    budget?: number
-  ): Promise<Project> {
+  async createProject(params: CreateProjectParams): Promise<Project> {
+    const {
+      imageUri, style, aiModel = 'QWEN', promptMode = 'CREATIVE',
+      name, roomType, colorPalette, customNote, objectRefs,
+      imageSize = 'auto', imageQuality = 'auto', imageFormat = 'jpeg',
+      imageCompression = 85, imageBackground = 'auto',
+    } = params;
+
     const formData = new FormData();
+    formData.append('image', { uri: imageUri, type: 'image/jpeg', name: 'photo.jpg' } as unknown as Blob);
+    formData.append('style',            style);
+    formData.append('aiModel',          aiModel);
+    formData.append('promptMode',       promptMode);
+    formData.append('imageSize',        imageSize);
+    formData.append('imageQuality',     imageQuality);
+    formData.append('imageFormat',      imageFormat);
+    formData.append('imageCompression', String(imageCompression));
+    formData.append('imageBackground',  imageBackground);
+    if (roomType)     formData.append('roomType',     roomType);
+    if (name)         formData.append('name',         name);
+    if (colorPalette) formData.append('colorPalette', colorPalette);
+    if (customNote)   formData.append('customNote',   customNote);
 
-    formData.append('image', {
-      uri: imageUri,
-      type: 'image/jpeg',
-      name: 'photo.jpg',
-    } as unknown as Blob);
-
-    formData.append('data', JSON.stringify({ style, name, budget }));
+    // Objets de référence (max 3 photos + titres)
+    if (objectRefs && objectRefs.length > 0) {
+      objectRefs.slice(0, 3).forEach((ref, i) => {
+        formData.append('objectImages', {
+          uri: ref.imageUri, type: 'image/jpeg', name: `object_${i}.jpg`,
+        } as unknown as Blob);
+        formData.append('objectTitles', ref.title || `Objet ${i + 1}`);
+      });
+    }
 
     const { data } = await api.post<Project>('/projects', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000,
     });
-
     return data;
   },
 

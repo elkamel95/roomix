@@ -1,0 +1,2 @@
+-- V7 : Ajout du mode de prompt (CREATIVE / PRO)
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS prompt_mode VARCHAR(20) NOT NULL DEFAULT 'CREATIVE';

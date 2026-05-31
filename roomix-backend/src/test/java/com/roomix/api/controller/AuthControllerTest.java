@@ -12,32 +12,44 @@ import com.roomix.api.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(
-        controllers = AuthController.class,
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class)
-)
+@WebMvcTest(controllers = AuthController.class)
+@AutoConfigureMockMvc(addFilters = false)   // désactive FilterChainProxy — les tests contrôleur ne testent pas la sécurité
+@TestPropertySource(properties = {
+        "app.cors.allowed-origins=http://localhost:3000",
+        "app.jwt.secret=test-secret-key-minimum-256-bits-long-for-testing-only",
+        "app.jwt.access-token-expiry=900",
+        "app.jwt.refresh-token-expiry=604800"
+})
 @DisplayName("AuthController — Tests intégration Web")
 class AuthControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+
+    // ── Dépendances de SecurityConfig (requises par @RequiredArgsConstructor) ──
+    @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
+    @MockBean UserDetailsService      userDetailsService;
+
+    // ── Service métier ──────────────────────────────────────────────────────────
     @MockBean AuthService authService;
+
+    // ────────────────────────────────────────────────────────────────────────────
 
     private AuthResponse buildAuthResponse(String email) {
         UserResponse user = UserResponse.builder()
@@ -65,7 +77,7 @@ class AuthControllerTest {
         when(authService.register(any())).thenReturn(buildAuthResponse("fahmi@roomix.ai"));
 
         mockMvc.perform(post("/auth/register")
-                        .with(csrf())
+
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated())
@@ -83,7 +95,7 @@ class AuthControllerTest {
         // email manquant
 
         mockMvc.perform(post("/auth/register")
-                        .with(csrf())
+
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -100,7 +112,7 @@ class AuthControllerTest {
         when(authService.register(any())).thenThrow(new EmailAlreadyExistsException("Email déjà utilisé"));
 
         mockMvc.perform(post("/auth/register")
-                        .with(csrf())
+
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isConflict());
@@ -116,7 +128,7 @@ class AuthControllerTest {
         when(authService.login(any())).thenReturn(buildAuthResponse("fahmi@roomix.ai"));
 
         mockMvc.perform(post("/auth/login")
-                        .with(csrf())
+
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -128,7 +140,7 @@ class AuthControllerTest {
     @DisplayName("POST /auth/logout — 204 si authentifié")
     @WithMockUser(username = "fahmi@roomix.ai")
     void logout_returns204() throws Exception {
-        mockMvc.perform(post("/auth/logout").with(csrf()))
+        mockMvc.perform(post("/auth/logout"))
                 .andExpect(status().isNoContent());
     }
 }
