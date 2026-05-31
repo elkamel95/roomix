@@ -8,7 +8,7 @@
     "scheme": "ROOMIX",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0f0f23"
     },
@@ -26,7 +26,11 @@
         "backgroundColor": "#0f0f23"
       },
       "package": "ai.roomix.app",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -36,7 +40,8 @@
         {
           "photosPermission": "Permettre à ROOMIX d'accéder à vos photos"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

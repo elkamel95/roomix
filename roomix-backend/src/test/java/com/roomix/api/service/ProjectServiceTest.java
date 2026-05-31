@@ -6,6 +6,7 @@ import com.roomix.api.model.dto.request.CreateProjectRequest;
 import com.roomix.api.model.dto.response.ProjectResponse;
 import com.roomix.api.model.entity.Project;
 import com.roomix.api.model.entity.User;
+import com.roomix.api.model.enums.AiModel;
 import com.roomix.api.model.enums.DecorationStyle;
 import com.roomix.api.model.enums.PlanType;
 import com.roomix.api.model.enums.ProjectStatus;
@@ -23,8 +24,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,12 +40,12 @@ import static org.mockito.Mockito.*;
 @DisplayName("ProjectService — Tests unitaires")
 class ProjectServiceTest {
 
-    @Mock private ProjectRepository projectRepository;
-    @Mock private GenerationRepository generationRepository;
-    @Mock private ProductRepository productRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private StorageService storageService;
-    @Mock private AiOrchestrationService aiOrchestrationService;
+    @Mock private ProjectRepository        projectRepository;
+    @Mock private GenerationRepository     generationRepository;
+    @Mock private ProductRepository        productRepository;
+    @Mock private UserRepository           userRepository;
+    @Mock private StorageService           storageService;
+    @Mock private AiOrchestrationService   aiOrchestrationService;
 
     @InjectMocks
     private ProjectService projectService;
@@ -74,25 +77,30 @@ class ProjectServiceTest {
     @Test
     @DisplayName("createProject — succès utilisateur FREE avec quota disponible")
     void createProject_freeUser_withinQuota() {
-        MockMultipartFile image = new MockMultipartFile("image", "room.jpg", "image/jpeg", new byte[100]);
+        MockMultipartFile image = new MockMultipartFile(
+                "image", "room.jpg", "image/jpeg", new byte[100]);
         CreateProjectRequest req = new CreateProjectRequest();
         req.setStyle(DecorationStyle.SCANDINAVIAN);
+        req.setAiModel(AiModel.QWEN);
 
         when(userRepository.findByEmail("free@roomix.ai")).thenReturn(Optional.of(freeUser));
         when(storageService.uploadImage(any(), any())).thenReturn("users/123/images/abc.jpg");
         when(storageService.getPublicUrl(any())).thenReturn("https://storage.roomix.ai/image.jpg");
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> {
             Project p = inv.getArgument(0);
-            org.springframework.test.util.ReflectionTestUtils.setField(p, "id", UUID.randomUUID());
+            ReflectionTestUtils.setField(p, "id", UUID.randomUUID());
             return p;
         });
         when(userRepository.save(any())).thenReturn(freeUser);
 
-        ProjectResponse response = projectService.createProject("free@roomix.ai", image, req);
+        ProjectResponse response = projectService.createProject(
+                "free@roomix.ai", image, req, Collections.emptyList(), Collections.emptyList());
 
         assertThat(response).isNotNull();
         assertThat(response.getStyle()).isEqualTo(DecorationStyle.SCANDINAVIAN);
         assertThat(response.getStatus()).isEqualTo(ProjectStatus.PENDING);
+
+        // En contexte sans transaction (tests unitaires), l'appel async est direct
         verify(aiOrchestrationService).processProjectAsync(any(UUID.class));
         verify(userRepository).save(freeUser);
     }
@@ -101,13 +109,15 @@ class ProjectServiceTest {
     @DisplayName("createProject — lève QuotaExceededException si quota FREE épuisé")
     void createProject_freeUser_quotaExceeded() {
         freeUser.setDailyGenerations(3);
-        MockMultipartFile image = new MockMultipartFile("image", "room.jpg", "image/jpeg", new byte[100]);
+        MockMultipartFile image = new MockMultipartFile(
+                "image", "room.jpg", "image/jpeg", new byte[100]);
         CreateProjectRequest req = new CreateProjectRequest();
         req.setStyle(DecorationStyle.COZY);
 
         when(userRepository.findByEmail("free@roomix.ai")).thenReturn(Optional.of(freeUser));
 
-        assertThatThrownBy(() -> projectService.createProject("free@roomix.ai", image, req))
+        assertThatThrownBy(() -> projectService.createProject(
+                        "free@roomix.ai", image, req, Collections.emptyList(), Collections.emptyList()))
                 .isInstanceOf(QuotaExceededException.class)
                 .hasMessageContaining("Premium");
 
@@ -119,23 +129,29 @@ class ProjectServiceTest {
     @DisplayName("createProject — utilisateur PREMIUM bypass le quota")
     void createProject_premiumUser_bypassesQuota() {
         premiumUser.setDailyGenerations(100);
-        MockMultipartFile image = new MockMultipartFile("image", "room.jpg", "image/jpeg", new byte[100]);
+        MockMultipartFile image = new MockMultipartFile(
+                "image", "room.jpg", "image/jpeg", new byte[100]);
         CreateProjectRequest req = new CreateProjectRequest();
         req.setStyle(DecorationStyle.MODERN_LUXURY);
+        req.setAiModel(AiModel.QWEN);
 
         when(userRepository.findByEmail("premium@roomix.ai")).thenReturn(Optional.of(premiumUser));
         when(storageService.uploadImage(any(), any())).thenReturn("key");
         when(storageService.getPublicUrl(any())).thenReturn("https://url");
-        when(projectRepository.save(any())).thenAnswer(inv -> {
+        when(projectRepository.save(any(Project.class))).thenAnswer(inv -> {
             Project p = inv.getArgument(0);
-            org.springframework.test.util.ReflectionTestUtils.setField(p, "id", UUID.randomUUID());
+            ReflectionTestUtils.setField(p, "id", UUID.randomUUID());
             return p;
         });
 
         assertThatNoException().isThrownBy(() ->
-                projectService.createProject("premium@roomix.ai", image, req));
+                projectService.createProject("premium@roomix.ai", image, req,
+                        Collections.emptyList(), Collections.emptyList()));
 
-        verify(userRepository, never()).save(any());
+        // PREMIUM : pas de sauvegarde du compteur utilisateur
+        verify(userRepository, never()).save(any(User.class));
+        // L'async est tout de même planifié
+        verify(aiOrchestrationService).processProjectAsync(any(UUID.class));
     }
 
     // ===================== GET PROJECT =====================
@@ -164,7 +180,8 @@ class ProjectServiceTest {
         when(userRepository.findByEmail("free@roomix.ai")).thenReturn(Optional.of(freeUser));
         when(projectRepository.findByUserOrderByCreatedAtDesc(any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(p)));
-        when(generationRepository.findTopByProjectOrderByCreatedAtDesc(any())).thenReturn(Optional.empty());
+        when(generationRepository.findTopByProjectOrderByCreatedAtDesc(any()))
+                .thenReturn(Optional.empty());
 
         var result = projectService.getProjects("free@roomix.ai", 0, 10, null);
 
