@@ -8,6 +8,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 
 import java.net.URI;
 
@@ -45,6 +46,11 @@ public class S3Config {
         if (storage.getEndpoint() != null && !storage.getEndpoint().isBlank()) {
             builder.endpointOverride(URI.create(storage.getEndpoint()));
         }
+
+        // Supabase S3 requiert le path-style (pas virtual-hosted)
+        builder.serviceConfiguration(S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .build());
 
         return builder.build();
     }
