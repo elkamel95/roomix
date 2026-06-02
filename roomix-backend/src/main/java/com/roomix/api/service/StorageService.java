@@ -54,8 +54,10 @@ public class StorageService {
         String bucket   = appProperties.getStorage().getBucket();
 
         if (endpoint != null && !endpoint.isBlank()) {
-            // Mode Supabase / S3 : https://project.supabase.co/storage/v1/s3/bucket/key
-            return String.format("%s/%s/%s", endpoint, bucket, key);
+            // URL publique Supabase : https://project.supabase.co/storage/v1/object/public/bucket/key
+            // (l'endpoint S3 est .../storage/v1/s3 — on remplace par .../storage/v1/object/public)
+            String baseUrl = endpoint.replaceAll("/s3$", "");
+            return String.format("%s/object/public/%s/%s", baseUrl, bucket, key);
         }
 
         // Mode développement local : servie par ce backend
