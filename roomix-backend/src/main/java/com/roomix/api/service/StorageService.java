@@ -105,6 +105,7 @@ public class StorageService {
     // ─────────────────────────────────────────────────────────────────────────
 
     public byte[] getImageBytes(String key) {
+        // 1. Essai lecture locale (mode dev)
         Path localPath = LOCAL_UPLOADS_DIR.resolve(key);
         if (Files.exists(localPath)) {
             try {
@@ -113,8 +114,26 @@ public class StorageService {
                 log.warn("Impossible de lire l'image locale {}: {}", key, e.getMessage());
             }
         }
-        // En mode production S3, on pourrait télécharger depuis S3 ici.
-        // Pour l'instant on retourne null — QwenService utilisera l'URL publique.
+
+        // 2. Mode production S3 — télécharge via l'URL publique Supabase
+        if (isS3Configured()) {
+            String publicUrl = getPublicUrl(key);
+            try {
+                java.net.URL url = new java.net.URI(publicUrl).toURL();
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(10_000);
+                conn.setReadTimeout(30_000);
+                conn.setRequestProperty("User-Agent", "RoomixBackend/1.0");
+                try (java.io.InputStream in = conn.getInputStream()) {
+                    byte[] bytes = in.readAllBytes();
+                    log.info("Image téléchargée depuis S3 public URL: {} ({} bytes)", publicUrl, bytes.length);
+                    return bytes;
+                }
+            } catch (Exception e) {
+                log.warn("Impossible de télécharger l'image depuis {}: {}", publicUrl, e.getMessage());
+            }
+        }
+
         return null;
     }
 
