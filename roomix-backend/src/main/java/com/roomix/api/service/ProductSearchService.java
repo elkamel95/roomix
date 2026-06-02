@@ -293,8 +293,7 @@ public class ProductSearchService {
                     .filter(b -> b == ProductBrand.IKEA || b == ProductBrand.CONFORAMA)
                     .map(Enum::name).toList();
         }
-        return appProperties.getProductSearch().getBrands().stream()
-                .filter(b -> "IKEA".equals(b) || "CONFORAMA".equals(b)).toList();
+        return List.of("IKEA", "CONFORAMA");
     }
 
     private List<String> getStyleKeywords(DecorationStyle style) {
