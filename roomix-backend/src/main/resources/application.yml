@@ -106,6 +106,7 @@ management:
 
 logging:
   level:
-    com.roomix: DEBUG
-    org.springframework.security: INFO
-    org.hibernate.SQL: DEBUG
+    com.roomix: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN

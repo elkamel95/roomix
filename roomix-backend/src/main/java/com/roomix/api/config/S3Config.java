@@ -28,29 +28,31 @@ public class S3Config {
         // Si les clés ne sont pas configurées, on retourne un client stub
         if (accessKey == null || accessKey.isBlank()) {
             log.warn("⚠️  Storage S3/Supabase non configuré (AWS_ACCESS_KEY vide). Upload d'images désactivé.");
-            // Retourne un client minimal avec des credentials fictifs pour éviter l'erreur de démarrage
             return S3Client.builder()
-                    .region(Region.EU_WEST_3)
+                    .region(Region.US_EAST_1)
                     .credentialsProvider(StaticCredentialsProvider.create(
                             AwsBasicCredentials.create("disabled", "disabled")
                     ))
                     .build();
         }
 
+        // Supabase requiert us-east-1 comme région de signing
+        String region = storage.getRegion() != null && !storage.getRegion().isBlank()
+                ? storage.getRegion() : "us-east-1";
+
         var builder = S3Client.builder()
-                .region(Region.of(storage.getRegion() != null ? storage.getRegion() : "eu-west-3"))
+                .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)
-                ));
+                ))
+                .serviceConfiguration(S3Configuration.builder()
+                        .pathStyleAccessEnabled(true)
+                        .checksumValidationEnabled(false)
+                        .build());
 
         if (storage.getEndpoint() != null && !storage.getEndpoint().isBlank()) {
             builder.endpointOverride(URI.create(storage.getEndpoint()));
         }
-
-        // Supabase S3 requiert le path-style (pas virtual-hosted)
-        builder.serviceConfiguration(S3Configuration.builder()
-                .pathStyleAccessEnabled(true)
-                .build());
 
         return builder.build();
     }
