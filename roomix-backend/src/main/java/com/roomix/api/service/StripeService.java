@@ -140,8 +140,12 @@ public class StripeService {
         // Récupérer le sessionId depuis le JSON brut (évite les problèmes de désérialisation)
         String sessionId;
         try {
-            com.google.gson.JsonObject obj = com.google.gson.JsonParser
+            com.google.gson.JsonObject data = com.google.gson.JsonParser
                     .parseString(event.getData().toJson()).getAsJsonObject();
+            // La structure Stripe est : { "object": { "id": "cs_test_...", ... } }
+            com.google.gson.JsonObject obj = data.has("object")
+                    ? data.getAsJsonObject("object")
+                    : data;
             sessionId = obj.get("id").getAsString();
         } catch (Exception e) {
             log.warn("Webhook checkout.session.completed — impossible d'extraire sessionId: {}", e.getMessage());
