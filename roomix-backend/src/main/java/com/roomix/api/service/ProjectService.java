@@ -272,13 +272,12 @@ public class ProjectService {
         return ProductResponse.builder()
                 .id(product.getId())
                 .name(product.getName())
-                .description(product.getDescription())
+                .color(product.getDescription())   // couleur stockée dans description
                 .category(product.getCategory())
                 .brand(product.getBrand())
                 .price(product.getPrice())
-                .currency(product.getCurrency())
+                .currency(product.getCurrency() != null ? product.getCurrency() : "EUR")
                 .productUrl(product.getProductUrl())
-                .affiliateUrl(product.getAffiliateUrl())
                 .imageUrl(product.getImageUrl())
                 .inStock(product.getInStock())
                 .build();

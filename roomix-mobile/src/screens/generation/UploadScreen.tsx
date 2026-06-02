@@ -115,7 +115,7 @@ export default function UploadScreen() {
     const isSquare = imageSize === 'auto' || imageSize === '1024x1024';
     const is4k = imageSize === '3840x2160' || imageSize === '2160x3840';
     const is2kSquare = imageSize === '2048x2048';
-    const is2kRect = imageSize === '2048x1152' || imageSize === '1152x2048';
+    const is2kRect = imageSize === '2048x1152' || (imageSize as string) === '1152x2048';
     const effectiveQuality = imageQuality === 'auto' ? 'medium' : imageQuality;
 
     const COST: Record<string, Record<string, number>> = {

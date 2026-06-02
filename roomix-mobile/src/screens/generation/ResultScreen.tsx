@@ -37,6 +37,156 @@ const LOADING_TIPS = [
   '💰 Le budget Premium donne des suggestions Roche Bobois et B&B Italia',
 ];
 
+// ── Config marques ─────────────────────────────────────────────────────────────
+
+const BRAND_CONFIG: Record<string, { label: string; color: string; bg: string; logo: string }> = {
+  IKEA:        { label: 'IKEA',        color: '#FFB800', bg: '#2a2200', logo: '🟡' },
+  CONFORAMA:   { label: 'Conforama',   color: '#E53935', bg: '#2a0a0a', logo: '🔴' },
+  AMAZON:      { label: 'Amazon',      color: '#FF9900', bg: '#2a1a00', logo: '📦' },
+  LEROY_MERLIN:{ label: 'Leroy Merlin',color: '#4CAF50', bg: '#0a1a0a', logo: '🟢' },
+  ACTION:      { label: 'Action',      color: '#2196F3', bg: '#0a1020', logo: '🔵' },
+  OTHER:       { label: 'Autre',       color: '#9E9E9E', bg: '#1a1a1a', logo: '🏪' },
+};
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  SOFA: '🛋️', TABLE: '🪵', CHAIR: '🪑', LAMP: '💡', CARPET: '🟫',
+  PLANT: '🌿', DESK: '🖥️', CURTAIN: '🪟', SHELF: '📚', BED: '🛏️',
+  DECORATION: '🖼️', STORAGE: '🗄️', OTHER: '📦',
+};
+
+// ── Composant ProductCard ──────────────────────────────────────────────────────
+//
+//  Layout :
+//  ┌─────────────────────────────┐
+//  │  [BADGE MARQUE]   image     │  ← image grande, 200px, badge en haut à gauche
+//  │         grande              │
+//  ├──────────────────┬──────────┤
+//  │  Nom du produit  │  Prix    │  ← nom à gauche, prix en haut à droite
+//  │  Couleur         │          │  ← couleur en italique sous le nom
+//  ├──────────────────┴──────────┤
+//  │     [ Acheter sur IKEA ]    │  ← bouton pleine largeur
+//  └─────────────────────────────┘
+
+function ProductCard({ product }: { product: Product }) {
+  const brand      = BRAND_CONFIG[product.brand] ?? BRAND_CONFIG.OTHER;
+  const catEmoji   = CATEGORY_EMOJI[product.category] ?? '📦';
+  const productUrl = product.productUrl;
+  const imageUrl   = product.imageUrl;
+  const color      = product.color ?? null;
+  const priceLabel = product.price != null
+    ? `${Number(product.price).toFixed(2).replace('.', ',')} €`
+    : null;
+
+  const [imgError, setImgError] = useState(false);
+  const showImage = !!imageUrl && !imgError;
+
+  const handleBuy = () => {
+    if (productUrl) Linking.openURL(productUrl).catch(() => {});
+  };
+
+  return (
+    <View style={ps.card}>
+
+      {/* ── 1. IMAGE GRANDE ── */}
+      <View style={ps.imgWrap}>
+        {showImage ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={ps.img}
+            resizeMode="cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <View style={[ps.imgPlaceholder, { backgroundColor: brand.bg }]}>
+            <Text style={ps.placeholderEmoji}>{catEmoji}</Text>
+          </View>
+        )}
+
+        {/* Badge marque — haut gauche */}
+        <View style={[ps.brandBadge, { backgroundColor: brand.bg, borderColor: brand.color }]}>
+          <Text style={[ps.brandBadgeText, { color: brand.color }]}>
+            {brand.logo}  {brand.label}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── 2. NOM + COULEUR  /  PRIX ── */}
+      <View style={ps.infoRow}>
+        <View style={ps.infoLeft}>
+          <Text style={ps.name} numberOfLines={2}>{product.name}</Text>
+          {color
+            ? <Text style={ps.color}>● {color}</Text>
+            : <Text style={ps.catLabel}>{catEmoji} {product.category.replace(/_/g, ' ')}</Text>
+          }
+        </View>
+        <View style={ps.infoRight}>
+          {priceLabel
+            ? <Text style={ps.price}>{priceLabel}</Text>
+            : <Text style={ps.priceNA}>N/A</Text>
+          }
+        </View>
+      </View>
+
+      {/* ── 3. BOUTON ACHETER pleine largeur ── */}
+      {productUrl ? (
+        <TouchableOpacity
+          style={[ps.buyBtn, { backgroundColor: brand.color }]}
+          onPress={handleBuy}
+          activeOpacity={0.8}
+        >
+          <Text style={ps.buyBtnText}>Acheter sur {brand.label}</Text>
+          <Text style={ps.buyBtnArrow}>→</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={ps.buyBtnDisabled}>
+          <Text style={ps.buyBtnDisabledText}>Lien indisponible</Text>
+        </View>
+      )}
+
+    </View>
+  );
+}
+
+// ── Composant ProductsSection ──────────────────────────────────────────────────
+
+function ProductsSection({ products }: { products: Product[] }) {
+  const total = products.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+
+  return (
+    <View style={ps.section}>
+
+      {/* En-tête section */}
+      <View style={ps.sectionHeader}>
+        <Text style={ps.sectionTitle}>🛍️ Produits suggérés</Text>
+        <View style={ps.countPill}>
+          <Text style={ps.countPillText}>{products.length} article{products.length > 1 ? 's' : ''}</Text>
+        </View>
+      </View>
+
+      {/* Grille 2 colonnes */}
+      <View style={ps.grid}>
+        {products.map(p => (
+          <View key={p.id} style={ps.gridCell}>
+            <ProductCard product={p} />
+          </View>
+        ))}
+      </View>
+
+      {/* Budget total */}
+      {total > 0 && (
+        <View style={ps.totalBox}>
+          <View>
+            <Text style={ps.totalLabel}>💰 Budget total estimé</Text>
+            <Text style={ps.totalSub}>Tous les produits ci-dessus</Text>
+          </View>
+          <Text style={ps.totalPrice}>{total.toFixed(0)} €</Text>
+        </View>
+      )}
+
+    </View>
+  );
+}
+
 // ── Composant LoadingScreen ────────────────────────────────────────────────────
 
 function LoadingScreen({ status }: { status: 'PENDING' | 'PROCESSING' }) {
@@ -325,7 +475,7 @@ export default function ResultScreen() {
                 height: COMPARISON_HEIGHT, overflow: 'hidden',
               }}>
                 <Image
-                  source={{ uri: beforeUri }}
+                  source={{ uri: beforeUri ?? undefined }}
                   style={{ position: 'absolute', top: 0, left: 0, width: containerWidth, height: COMPARISON_HEIGHT }}
                   resizeMode="cover"
                 />
@@ -405,34 +555,7 @@ export default function ResultScreen() {
 
       {/* ── Produits ─────────────────────────────────── */}
       {isDone && products && products.length > 0 && (
-        <View style={s.productsSection}>
-          <Text style={s.productsTitle}>🛍️ Produits suggérés</Text>
-          {products.map((product: Product) => (
-            <TouchableOpacity
-              key={product.id}
-              style={s.productCard}
-              onPress={() => product.affiliateUrl && Linking.openURL(product.affiliateUrl)}
-            >
-              <View style={s.productInfo}>
-                <Text style={s.productName}>{product.name}</Text>
-                <Text style={s.productBrand}>{product.brand}</Text>
-              </View>
-              <View style={s.productRight}>
-                <Text style={s.productPrice}>
-                  {product.price ? `${product.price} €` : '—'}
-                </Text>
-                <Text style={s.productLink}>Voir →</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-
-          <View style={s.totalBox}>
-            <Text style={s.totalLabel}>💰 Budget estimé</Text>
-            <Text style={s.totalPrice}>
-              {products.reduce((sum, p) => sum + (p.price ?? 0), 0).toFixed(0)} €
-            </Text>
-          </View>
-        </View>
+        <ProductsSection products={products} />
       )}
 
       {/* Modal plein écran */}
@@ -458,7 +581,7 @@ export default function ResultScreen() {
           >
             {fullscreenUri && (
               <Image
-                source={{ uri: fullscreenUri }}
+                source={{ uri: fullscreenUri ?? undefined }}
                 style={{ width: windowWidth, height: windowHeight * 0.9, resizeMode: 'contain' }}
               />
             )}
@@ -469,6 +592,108 @@ export default function ResultScreen() {
     </ScrollView>
   );
 }
+
+// ── Styles Produits ────────────────────────────────────────────────────────────
+
+const CARD_WIDTH = 170;   // largeur d'une cellule de grille
+
+const ps = StyleSheet.create({
+
+  // ── Section ──────────────────────────────────────────────────────────────────
+  section: { marginTop: 12, marginBottom: 8 },
+
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 16,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  countPill: {
+    backgroundColor: '#2d1b69', borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: '#4c1d95',
+  },
+  countPillText: { color: '#c4b5fd', fontSize: 12, fontWeight: '700' },
+
+  // ── Grille 2 colonnes ────────────────────────────────────────────────────────
+  grid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 12,
+  },
+  gridCell: { width: CARD_WIDTH },
+
+  // ── Card ─────────────────────────────────────────────────────────────────────
+  card: {
+    backgroundColor: '#1a1a3e',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#2a2a5e',
+    overflow: 'hidden',
+    width: CARD_WIDTH,
+  },
+
+  // ── 1. Image grande ──────────────────────────────────────────────────────────
+  imgWrap:    { width: CARD_WIDTH, height: 200, position: 'relative' },
+  img:        { width: CARD_WIDTH, height: 200 },
+  imgPlaceholder: {
+    width: CARD_WIDTH, height: 200,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  placeholderEmoji: { fontSize: 52 },
+
+  // Badge marque haut-gauche
+  brandBadge: {
+    position: 'absolute', top: 10, left: 10,
+    borderRadius: 10, borderWidth: 1.5,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  brandBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
+
+  // ── 2. Ligne Nom + Prix ──────────────────────────────────────────────────────
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    gap: 6,
+  },
+  infoLeft:  { flex: 1, gap: 4 },
+  infoRight: { alignItems: 'flex-end', paddingTop: 2 },
+
+  name:     { color: '#fff', fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  color:    { color: '#a78bfa', fontSize: 11, fontStyle: 'italic' },
+  catLabel: { color: '#555', fontSize: 11 },
+
+  price:   { color: '#c4b5fd', fontSize: 18, fontWeight: '900' },
+  priceNA: { color: '#444', fontSize: 13 },
+
+  // ── 3. Bouton Acheter pleine largeur ─────────────────────────────────────────
+  buyBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 12, marginTop: 10, marginBottom: 12,
+    borderRadius: 12, paddingVertical: 11, gap: 6,
+  },
+  buyBtnText:  { color: '#000', fontSize: 13, fontWeight: '900' },
+  buyBtnArrow: { color: '#000', fontSize: 14, fontWeight: '900' },
+
+  buyBtnDisabled: {
+    marginHorizontal: 12, marginTop: 10, marginBottom: 12,
+    borderRadius: 12, paddingVertical: 11,
+    backgroundColor: '#1e1e2e', borderWidth: 1, borderColor: '#333',
+    alignItems: 'center',
+  },
+  buyBtnDisabledText: { color: '#444', fontSize: 12 },
+
+  // ── Budget total ─────────────────────────────────────────────────────────────
+  totalBox: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#2d1b69', borderRadius: 16, padding: 18,
+    marginTop: 8, marginBottom: 32,
+    borderWidth: 1, borderColor: '#4c1d95',
+  },
+  totalLabel: { color: '#c4b5fd', fontSize: 15, fontWeight: '700' },
+  totalSub:   { color: '#7c6fab', fontSize: 11, marginTop: 3 },
+  totalPrice: { color: '#fff', fontSize: 28, fontWeight: '900' },
+});
 
 // ── Styles Loading ─────────────────────────────────────────────────────────────
 
@@ -592,29 +817,6 @@ const s = StyleSheet.create({
   },
   shopBtnText:  { color: '#fff', fontWeight: '700', fontSize: 15 },
   shopBtnArrow: { color: '#7C3AED', fontSize: 22, fontWeight: '800' },
-
-  // Products
-  productsSection: { marginTop: 4 },
-  productsTitle:   { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 12 },
-  productCard: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#1a1a3e', borderRadius: 14, padding: 14, marginBottom: 8,
-    borderWidth: 1, borderColor: '#2a2a5e',
-  },
-  productInfo:  { flex: 1 },
-  productName:  { color: '#fff', fontWeight: '600', fontSize: 14 },
-  productBrand: { color: '#666', fontSize: 11, marginTop: 2 },
-  productRight: { alignItems: 'flex-end' },
-  productPrice: { color: '#9B5DEA', fontWeight: '800', fontSize: 16 },
-  productLink:  { color: '#555', fontSize: 11 },
-
-  totalBox: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#2d1b69', borderRadius: 14, padding: 18,
-    marginTop: 4, marginBottom: 32,
-  },
-  totalLabel: { color: '#ccc', fontSize: 14, fontWeight: '600' },
-  totalPrice: { color: '#fff', fontSize: 24, fontWeight: '800' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: '#000' },

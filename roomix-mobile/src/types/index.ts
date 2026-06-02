@@ -1,7 +1,7 @@
 export type PlanType = 'FREE' | 'PREMIUM' | 'PRO';
 export type ProjectStatus = 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
-export type ProductBrand = 'IKEA' | 'AMAZON' | 'LEROY_MERLIN' | 'ACTION' | 'OTHER';
-export type ProductCategory = 'SOFA' | 'TABLE' | 'CHAIR' | 'LAMP' | 'CARPET' | 'PLANT' | 'CURTAIN' | 'SHELF' | 'DESK' | 'BED' | 'DECORATION' | 'OTHER';
+export type ProductBrand = 'IKEA' | 'CONFORAMA' | 'AMAZON' | 'LEROY_MERLIN' | 'ACTION' | 'OTHER';
+export type ProductCategory = 'SOFA' | 'TABLE' | 'CHAIR' | 'LAMP' | 'CARPET' | 'PLANT' | 'CURTAIN' | 'SHELF' | 'DESK' | 'BED' | 'DECORATION' | 'OTHER' | 'STORAGE';
 
 export type DecorationStyle =
   | 'SCANDINAVIAN' | 'MODERN_LUXURY' | 'MINIMALIST' | 'JAPANESE_ZEN'
@@ -56,15 +56,14 @@ export interface Project {
 export interface Product {
   id: string;
   name: string;
-  description?: string;
+  color?: string;          // couleur principale (ex: "Hakebo beige")
   category: ProductCategory;
   brand: ProductBrand;
   price?: number;
-  currency: string;
+  currency?: string;
   productUrl?: string;
-  affiliateUrl?: string;
-  imageUrl?: string;
-  inStock: boolean;
+  imageUrl?: string;       // URL image CDN du marchand
+  inStock?: boolean;
 }
 
 export interface Quota {
