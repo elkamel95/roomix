@@ -137,14 +137,25 @@ public class StripeService {
             return;
         }
 
-        com.stripe.model.StripeObject stripeObject = event.getDataObjectDeserializer()
-                .getObject().orElse(null);
-        if (!(stripeObject instanceof Session session)) {
-            log.warn("Webhook checkout.session.completed — objet non désérialisé");
+        // Récupérer le sessionId depuis le JSON brut (évite les problèmes de désérialisation)
+        String sessionId;
+        try {
+            com.google.gson.JsonObject obj = com.google.gson.JsonParser
+                    .parseString(event.getData().toJson()).getAsJsonObject();
+            sessionId = obj.get("id").getAsString();
+        } catch (Exception e) {
+            log.warn("Webhook checkout.session.completed — impossible d'extraire sessionId: {}", e.getMessage());
             return;
         }
 
-        String sessionId = session.getId();
+        // Charger la session complète depuis l'API Stripe
+        Session session;
+        try {
+            session = Session.retrieve(sessionId);
+        } catch (StripeException e) {
+            log.error("Webhook — impossible de récupérer la session {}: {}", sessionId, e.getMessage());
+            return;
+        }
 
         // Idempotence : vérifier que cette session n'a pas déjà été traitée
         if (transactionRepository.findByReference(sessionId).isPresent()) {
