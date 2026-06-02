@@ -9,6 +9,8 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.auth.signer.AwsS3V4Signer;
+import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 
 import java.net.URI;
 
@@ -37,20 +39,24 @@ public class S3Config {
                     .build();
         }
 
+        // Supabase requiert la région "auto" — on utilise us-east-1 comme proxy
+        // et on désactive la validation de région pour compatibilité
+        String region = storage.getRegion() != null && !storage.getRegion().isBlank()
+                ? storage.getRegion() : "us-east-1";
+
         var builder = S3Client.builder()
-                .region(Region.of(storage.getRegion() != null ? storage.getRegion() : "eu-west-3"))
+                .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)
-                ));
+                ))
+                .serviceConfiguration(S3Configuration.builder()
+                        .pathStyleAccessEnabled(true)
+                        .checksumValidationEnabled(false)
+                        .build());
 
         if (storage.getEndpoint() != null && !storage.getEndpoint().isBlank()) {
             builder.endpointOverride(URI.create(storage.getEndpoint()));
         }
-
-        // Supabase S3 requiert le path-style (pas virtual-hosted)
-        builder.serviceConfiguration(S3Configuration.builder()
-                .pathStyleAccessEnabled(true)
-                .build());
 
         return builder.build();
     }
