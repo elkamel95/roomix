@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image,
-  Alert, ActivityIndicator, ScrollView, TextInput,
+  Alert, ActivityIndicator, ScrollView, TextInput, Switch,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -94,6 +94,16 @@ export default function UploadScreen() {
   const [imageFormat,       setImageFormat]       = useState<ImageFormat>('jpeg');
   const [imageCompression,  setImageCompression]  = useState<number>(85);
   const [imageBackground,   setImageBackground]   = useState<ImageBackground>('auto');
+
+  // ── Recherche produits en ligne ───────────────────────────────────────────
+  const [productSearchEnabled, setProductSearchEnabled] = useState(false);
+  const [selectedBrands,       setSelectedBrands]       = useState<string[]>([]);
+
+  const toggleBrand = (brand: string) => {
+    setSelectedBrands(prev =>
+      prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
+    );
+  };
 
   // ── Token system ──────────────────────────────────────────────────────────
   const { user } = useAuthStore();
@@ -637,6 +647,45 @@ export default function UploadScreen() {
         </View>
       )}
 
+      {/* ── Produits en ligne ───────────────────────────── */}
+      <View style={s.productSection}>
+        <View style={s.productHeader}>
+          <Text style={s.productTitle}>🛍️ Produits en ligne</Text>
+          <Switch
+            value={productSearchEnabled}
+            onValueChange={(v) => {
+              setProductSearchEnabled(v);
+              if (!v) setSelectedBrands([]);
+            }}
+            trackColor={{ false: '#2a2a5e', true: '#6D28D9' }}
+            thumbColor={productSearchEnabled ? '#9B5DEA' : '#888'}
+          />
+        </View>
+        <Text style={s.productSubtitle}>
+          Trouve des meubles réels correspondant à votre style
+        </Text>
+        {productSearchEnabled && (
+          <View style={s.brandRow}>
+            {[
+              { key: 'IKEA',      emoji: '🟡', color: '#FFD700' },
+              { key: 'CONFORAMA', emoji: '🔴', color: '#E53935' },
+            ].map(({ key, emoji, color }) => {
+              const active = selectedBrands.includes(key);
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[s.brandChip, active && { borderColor: color, backgroundColor: color + '22' }]}
+                  onPress={() => toggleBrand(key)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.brandChipText, active && { color }]}>{emoji} {key}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
       {/* ── Bouton générer ──────────────────────────────── */}
       <TouchableOpacity
         style={[s.generateBtn, !canGenerate && s.generateBtnDisabled]}
@@ -918,6 +967,15 @@ const s = StyleSheet.create({
   tokenWarningText: { color: '#EF4444', fontSize: 12, fontWeight: '700', textAlign: 'center' },
 
   // Generate button
+  // Produits en ligne
+  productSection:   { marginTop: 28, backgroundColor: '#1a1a3e', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a5e' },
+  productHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  productTitle:     { fontSize: 15, fontWeight: '700', color: '#fff' },
+  productSubtitle:  { fontSize: 12, color: '#888', marginTop: 4 },
+  brandRow:         { flexDirection: 'row', gap: 10, marginTop: 14 },
+  brandChip:        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#3a3a6e' },
+  brandChipText:    { fontSize: 13, fontWeight: '700', color: '#aaa' },
+
   generateBtn:          { borderRadius: 16, overflow: 'hidden', marginTop: 32 },
   generateBtnDisabled:  { opacity: 0.45 },
   generateBtnGradient:  { paddingVertical: 20, alignItems: 'center' },
