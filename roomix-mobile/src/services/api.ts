@@ -3,6 +3,11 @@ import * as SecureStore from 'expo-secure-store';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080/api/v1';
 
+// Callback appelé quand le serveur retourne 403 (token invalide)
+// Enregistré par le composant racine pour déclencher un logout propre
+let onForceLogout: (() => void) | null = null;
+export function registerForceLogout(fn: () => void) { onForceLogout = fn; }
+
 /**
  * Normalise une URL d'image retournée par le backend.
  *
@@ -54,8 +59,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const status = error.response?.status;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // 401 → essai refresh
+    if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
         const refreshToken = await SecureStore.getItemAsync('refresh_token');
@@ -71,6 +78,16 @@ api.interceptors.response.use(
         await SecureStore.deleteItemAsync('access_token');
         await SecureStore.deleteItemAsync('refresh_token');
       }
+    }
+
+    // 403 → token invalide (ex: clé JWT différente entre Railway et local)
+    // Vider les tokens → le guard de navigation détectera isAuthenticated=false → login
+    if (status === 403) {
+      await SecureStore.deleteItemAsync('access_token');
+      await SecureStore.deleteItemAsync('refresh_token');
+      // Réinitialiser le store sans importer directement (évite la dépendance circulaire)
+      onForceLogout?.();
+      if (__DEV__) console.warn('[API] 403 — token invalide, déconnexion forcée');
     }
 
     return Promise.reject(error);

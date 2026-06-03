@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../src/store/slices/authStore';
-import { api } from '../src/services/api';
+import { api, registerForceLogout } from '../src/services/api';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,6 +20,9 @@ function RootLayoutNav() {
   const { setUser, logout } = useAuthStore();
 
   useEffect(() => {
+    // Enregistrer le callback de déconnexion forcée (appelé sur 403)
+    registerForceLogout(() => logout());
+
     const restoreSession = async () => {
       const token = await SecureStore.getItemAsync('access_token');
       if (!token) return;
