@@ -56,102 +56,88 @@ const CATEGORY_EMOJI: Record<string, string> = {
 
 // ── Composant ProductCard ──────────────────────────────────────────────────────
 //
-//  Layout :
-//  ┌─────────────────────────────┐
-//  │  [BADGE MARQUE]   image     │  ← image grande, 200px, badge en haut à gauche
-//  │         grande              │
-//  ├──────────────────┬──────────┤
-//  │  Nom du produit  │  Prix    │  ← nom à gauche, prix en haut à droite
-//  │  Couleur         │          │  ← couleur en italique sous le nom
-//  ├──────────────────┴──────────┤
-//  │     [ Acheter sur IKEA ]    │  ← bouton pleine largeur
-//  └─────────────────────────────┘
+//  Layout pleine largeur, horizontal (style e-commerce) :
+//  ┌───────────────────────────────────────────────────┐
+//  │ ┌──────────┐  KIVIK Canapé d'angle 4 places       │
+//  │ │          │  🟡 IKEA                             │
+//  │ │  IMAGE   │                                      │
+//  │ │  RÉELLE  │  Bleu foncé                          │
+//  │ │          │                                      │
+//  │ └──────────┘  1 499,00 €                          │
+//  │               [ Acheter sur IKEA  →  ]            │
+//  └───────────────────────────────────────────────────┘
 
 function ProductCard({ product }: { product: Product }) {
-  const brand      = BRAND_CONFIG[product.brand] ?? BRAND_CONFIG.OTHER;
-  const catEmoji   = CATEGORY_EMOJI[product.category] ?? '📦';
-  const productUrl = product.productUrl;
-  const imageUrl   = product.imageUrl;
-  const color      = product.color ?? null;
-  const priceLabel = product.price != null
-    ? `${Number(product.price).toFixed(2).replace('.', ',')} €`
+  const brand    = BRAND_CONFIG[product.brand] ?? BRAND_CONFIG.OTHER;
+  const catEmoji = CATEGORY_EMOJI[product.category] ?? '📦';
+  const url      = product.productUrl;
+  const color    = product.color ?? null;
+  const price    = product.price != null
+    ? `${Number(product.price).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`
     : null;
 
   const [imgError, setImgError] = useState(false);
-  const showImage = !!imageUrl && !imgError;
-
-  const handleBuy = () => {
-    if (productUrl) Linking.openURL(productUrl).catch(() => {});
-  };
+  const hasImage = !!product.imageUrl && !imgError;
 
   return (
     <View style={ps.card}>
 
-      {/* ── 1. IMAGE GRANDE ── */}
-      <View style={ps.imgWrap}>
-        {showImage ? (
+      {/* ── Image à gauche ── */}
+      <View style={ps.imgCol}>
+        {hasImage ? (
           <Image
-            source={{ uri: imageUrl }}
+            source={{ uri: product.imageUrl! }}
             style={ps.img}
             resizeMode="cover"
             onError={() => setImgError(true)}
           />
         ) : (
-          <View style={[ps.imgPlaceholder, { backgroundColor: brand.bg }]}>
-            <Text style={ps.placeholderEmoji}>{catEmoji}</Text>
+          <View style={[ps.imgFallback, { backgroundColor: brand.bg }]}>
+            <Text style={ps.imgFallbackEmoji}>{catEmoji}</Text>
           </View>
         )}
+      </View>
 
-        {/* Badge marque — haut gauche */}
-        <View style={[ps.brandBadge, { backgroundColor: brand.bg, borderColor: brand.color }]}>
-          <Text style={[ps.brandBadgeText, { color: brand.color }]}>
-            {brand.logo}  {brand.label}
+      {/* ── Infos à droite ── */}
+      <View style={ps.infoCol}>
+
+        {/* Nom */}
+        <Text style={ps.name} numberOfLines={2}>{product.name}</Text>
+
+        {/* Badge marque */}
+        <View style={[ps.brandPill, { backgroundColor: brand.bg, borderColor: brand.color }]}>
+          <Text style={[ps.brandPillText, { color: brand.color }]}>
+            {brand.logo} {brand.label}
           </Text>
         </View>
+
+        {/* Couleur / catégorie */}
+        {color
+          ? <Text style={ps.color}>{color}</Text>
+          : <Text style={ps.cat}>{catEmoji} {product.category.replace(/_/g, ' ')}</Text>
+        }
+
+        {/* Prix */}
+        <Text style={ps.price}>{price ?? 'Prix N/A'}</Text>
+
+        {/* Bouton CTA */}
+        {url ? (
+          <TouchableOpacity
+            style={[ps.buyBtn, { borderColor: brand.color }]}
+            onPress={() => Linking.openURL(url).catch(() => {})}
+            activeOpacity={0.75}
+          >
+            <Text style={[ps.buyBtnText, { color: brand.color }]}>
+              Acheter sur {brand.label}
+            </Text>
+            <Text style={[ps.buyBtnArrow, { color: brand.color }]}>→</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={ps.buyBtnOff}>
+            <Text style={ps.buyBtnOffText}>Lien indisponible</Text>
+          </View>
+        )}
       </View>
-
-      {/* ── 2. NOM + COULEUR  /  PRIX ── */}
-      <View style={ps.infoRow}>
-        <View style={ps.infoLeft}>
-          <Text style={ps.name} numberOfLines={2}>{product.name}</Text>
-          {color
-            ? <Text style={ps.color}>● {color}</Text>
-            : <Text style={ps.catLabel}>{catEmoji} {product.category.replace(/_/g, ' ')}</Text>
-          }
-        </View>
-        <View style={ps.infoRight}>
-          {priceLabel
-            ? <Text style={ps.price}>{priceLabel}</Text>
-            : <Text style={ps.priceNA}>N/A</Text>
-          }
-        </View>
-      </View>
-
-      {/* ── 3. BOUTON ACHETER pleine largeur ── */}
-      {productUrl ? (
-        <TouchableOpacity
-          style={[ps.buyBtn, { backgroundColor: brand.color }]}
-          onPress={handleBuy}
-          activeOpacity={0.8}
-        >
-          <Text style={ps.buyBtnText}>Acheter sur {brand.label}</Text>
-          <Text style={ps.buyBtnArrow}>→</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={ps.buyBtnDisabled}>
-          <Text style={ps.buyBtnDisabledText}>Lien indisponible</Text>
-        </View>
-      )}
-
-      {/* ── DEBUG : URLs visibles en mode test ── */}
-      {__DEV__ && (
-        <View style={ps.debugBox}>
-          <Text style={ps.debugLabel}>🖼 imageUrl :</Text>
-          <Text style={ps.debugUrl} selectable>{imageUrl ?? '—'}</Text>
-          <Text style={ps.debugLabel}>🔗 productUrl :</Text>
-          <Text style={ps.debugUrl} selectable>{productUrl ?? '—'}</Text>
-        </View>
-      )}
 
     </View>
   );
@@ -165,31 +151,28 @@ function ProductsSection({ products }: { products: Product[] }) {
   return (
     <View style={ps.section}>
 
-      {/* En-tête section */}
       <View style={ps.sectionHeader}>
         <Text style={ps.sectionTitle}>🛍️ Produits suggérés</Text>
         <View style={ps.countPill}>
-          <Text style={ps.countPillText}>{products.length} article{products.length > 1 ? 's' : ''}</Text>
+          <Text style={ps.countPillText}>
+            {products.length} article{products.length > 1 ? 's' : ''}
+          </Text>
         </View>
       </View>
 
-      {/* Grille 2 colonnes */}
-      <View style={ps.grid}>
-        {products.map(p => (
-          <View key={p.id} style={ps.gridCell}>
-            <ProductCard product={p} />
-          </View>
-        ))}
-      </View>
+      {/* Liste pleine largeur */}
+      {products.map(p => <ProductCard key={p.id} product={p} />)}
 
       {/* Budget total */}
       {total > 0 && (
         <View style={ps.totalBox}>
           <View>
             <Text style={ps.totalLabel}>💰 Budget total estimé</Text>
-            <Text style={ps.totalSub}>Tous les produits ci-dessus</Text>
+            <Text style={ps.totalSub}>Tous les produits listés</Text>
           </View>
-          <Text style={ps.totalPrice}>{total.toFixed(0)} €</Text>
+          <Text style={ps.totalPrice}>
+            {total.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+          </Text>
         </View>
       )}
 
@@ -623,18 +606,15 @@ export default function ResultScreen() {
 
 // ── Styles Produits ────────────────────────────────────────────────────────────
 
-const CARD_WIDTH = 170;   // largeur d'une cellule de grille
-
 const ps = StyleSheet.create({
 
   // ── Section ──────────────────────────────────────────────────────────────────
   section: { marginTop: 12, marginBottom: 8 },
-
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 16,
+    justifyContent: 'space-between', marginBottom: 14,
   },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  sectionTitle:  { fontSize: 18, fontWeight: '800', color: '#fff' },
   countPill: {
     backgroundColor: '#2d1b69', borderRadius: 20,
     paddingHorizontal: 10, paddingVertical: 4,
@@ -642,90 +622,74 @@ const ps = StyleSheet.create({
   },
   countPillText: { color: '#c4b5fd', fontSize: 12, fontWeight: '700' },
 
-  // ── Grille 2 colonnes ────────────────────────────────────────────────────────
-  grid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 12,
-  },
-  gridCell: { width: CARD_WIDTH },
-
-  // ── Card ─────────────────────────────────────────────────────────────────────
+  // ── Card pleine largeur horizontale ──────────────────────────────────────────
   card: {
+    flexDirection: 'row',
     backgroundColor: '#1a1a3e',
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#2a2a5e',
     overflow: 'hidden',
-    width: CARD_WIDTH,
+    marginBottom: 12,
+    minHeight: 130,
   },
 
-  // ── 1. Image grande ──────────────────────────────────────────────────────────
-  imgWrap:    { width: CARD_WIDTH, height: 200, position: 'relative' },
-  img:        { width: CARD_WIDTH, height: 200 },
-  imgPlaceholder: {
-    width: CARD_WIDTH, height: 200,
+  // ── Colonne image (gauche) ────────────────────────────────────────────────────
+  imgCol: { width: 110, flexShrink: 0 },
+  img: { width: 110, height: '100%', minHeight: 130 },
+  imgFallback: {
+    width: 110, minHeight: 130,
     alignItems: 'center', justifyContent: 'center',
   },
-  placeholderEmoji: { fontSize: 52 },
+  imgFallbackEmoji: { fontSize: 36 },
 
-  // Badge marque haut-gauche
-  brandBadge: {
-    position: 'absolute', top: 10, left: 10,
-    borderRadius: 10, borderWidth: 1.5,
-    paddingHorizontal: 8, paddingVertical: 4,
-  },
-  brandBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
-
-  // ── 2. Ligne Nom + Prix ──────────────────────────────────────────────────────
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  // ── Colonne infos (droite) ────────────────────────────────────────────────────
+  infoCol: {
+    flex: 1,
+    padding: 12,
+    gap: 5,
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    gap: 6,
   },
-  infoLeft:  { flex: 1, gap: 4 },
-  infoRight: { alignItems: 'flex-end', paddingTop: 2 },
 
-  name:     { color: '#fff', fontSize: 13, fontWeight: '700', lineHeight: 18 },
-  color:    { color: '#a78bfa', fontSize: 11, fontStyle: 'italic' },
-  catLabel: { color: '#555', fontSize: 11 },
+  // Nom
+  name: { color: '#fff', fontSize: 14, fontWeight: '700', lineHeight: 19 },
 
-  price:   { color: '#c4b5fd', fontSize: 18, fontWeight: '900' },
-  priceNA: { color: '#444', fontSize: 13 },
+  // Badge marque inline
+  brandPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 8, borderWidth: 1.5,
+    paddingHorizontal: 7, paddingVertical: 3,
+  },
+  brandPillText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
 
-  // ── 3. Bouton Acheter pleine largeur ─────────────────────────────────────────
+  // Couleur / catégorie
+  color: { color: '#a78bfa', fontSize: 12, fontStyle: 'italic' },
+  cat:   { color: '#555',    fontSize: 11 },
+
+  // Prix
+  price: { color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+
+  // Bouton CTA pleine largeur de la colonne
   buyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    marginHorizontal: 12, marginTop: 10, marginBottom: 12,
-    borderRadius: 12, paddingVertical: 11, gap: 6,
+    borderRadius: 10, borderWidth: 1.5,
+    paddingVertical: 9, gap: 6,
   },
-  buyBtnText:  { color: '#000', fontSize: 13, fontWeight: '900' },
-  buyBtnArrow: { color: '#000', fontSize: 14, fontWeight: '900' },
+  buyBtnText:  { fontSize: 12, fontWeight: '800' },
+  buyBtnArrow: { fontSize: 13, fontWeight: '900' },
 
-  buyBtnDisabled: {
-    marginHorizontal: 12, marginTop: 10, marginBottom: 12,
-    borderRadius: 12, paddingVertical: 11,
-    backgroundColor: '#1e1e2e', borderWidth: 1, borderColor: '#333',
+  buyBtnOff: {
+    borderRadius: 10, paddingVertical: 9,
+    backgroundColor: '#111', borderWidth: 1, borderColor: '#222',
     alignItems: 'center',
   },
-  buyBtnDisabledText: { color: '#444', fontSize: 12 },
-
-  // ── Debug URLs (visible uniquement en __DEV__) ───────────────────────────────
-  debugBox: {
-    marginHorizontal: 12, marginBottom: 10,
-    backgroundColor: '#0d0d1a', borderRadius: 8,
-    borderWidth: 1, borderColor: '#2a2a4a',
-    padding: 8, gap: 2,
-  },
-  debugLabel: { color: '#4a4a7a', fontSize: 9, fontWeight: '700', marginTop: 4 },
-  debugUrl:   { color: '#6a6aaa', fontSize: 9, fontFamily: 'monospace' },
+  buyBtnOffText: { color: '#444', fontSize: 11 },
 
   // ── Budget total ─────────────────────────────────────────────────────────────
   totalBox: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     backgroundColor: '#2d1b69', borderRadius: 16, padding: 18,
-    marginTop: 8, marginBottom: 32,
+    marginTop: 4, marginBottom: 32,
     borderWidth: 1, borderColor: '#4c1d95',
   },
   totalLabel: { color: '#c4b5fd', fontSize: 15, fontWeight: '700' },
