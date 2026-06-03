@@ -210,13 +210,15 @@ public class AiOrchestrationService {
             log.info("Image générée: {}", resultImageUrl);
             int processingTime = (int) (Instant.now().toEpochMilli() - startTime);
 
-            // ── 5. Sauvegarder génération + produits + DONE ───────────────────
-            final String finalUrl  = resultImageUrl;
+            // ── 5. Sauvegarder génération + DONE ─────────────────────────────
+            final String finalUrl    = resultImageUrl;
             final AiModel finalModel = usedModel;
             final String finalPrompt = prompt;
+            final byte[] finalImageBytes = imageBytes;
 
-            transactionTemplate.execute(tx -> {
-                Generation generation = Generation.builder()
+            // 5a — Génération + DONE en DB
+            Generation generation = transactionTemplate.execute(tx -> {
+                Generation gen = Generation.builder()
                         .project(project)
                         .resultImageUrl(finalUrl)
                         .prompt(finalPrompt)
@@ -224,17 +226,45 @@ public class AiOrchestrationService {
                         .model(finalModel)
                         .processingTimeMs(processingTime)
                         .build();
-                generationRepository.save(generation);
-
-                List<Product> products = generateProductSuggestions(generation, project.getStyle(), project.getBudget());
-                productRepository.saveAll(products);
-
+                generationRepository.save(gen);
                 project.setStatus(ProjectStatus.DONE);
                 projectRepository.save(project);
-                return null;
+                return gen;
             });
 
             log.info("✓ Projet {} → DONE en {}ms", projectId, processingTime);
+
+            // 5b — Recherche produits HORS transaction (appel ChatGPT Vision = long)
+            boolean searchOnline = Boolean.TRUE.equals(project.getProductSearchEnabled())
+                    || appProperties.getProductSearch().isEnabled();
+
+            List<Product> products;
+            if (searchOnline && generation != null) {
+                log.info("Recherche produits via ChatGPT Vision — projet {}", projectId);
+                List<Product> online = productSearchService.searchProducts(
+                        generation,
+                        project.getStyle(),
+                        project.getPreferredBrands(),
+                        finalUrl,
+                        finalImageBytes
+                );
+                products = online.isEmpty()
+                        ? generateProductSuggestions(generation, project.getStyle(), project.getBudget())
+                        : online;
+            } else if (generation != null) {
+                products = generateProductSuggestions(generation, project.getStyle(), project.getBudget());
+            } else {
+                products = List.of();
+            }
+
+            // 5c — Sauvegarde produits
+            if (!products.isEmpty()) {
+                final List<Product> toSave = products;
+                transactionTemplate.execute(tx -> {
+                    productRepository.saveAll(toSave);
+                    return null;
+                });
+            }
 
         } catch (Exception e) {
             log.error("✗ Erreur génération projet {}: {}", projectId, e.getMessage(), e);

@@ -14,232 +14,269 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Recherche de produits réels via les APIs publiques des enseignes.
+ * Recherche de produits réels via ChatGPT Vision + Web Search.
  *
- * ── IKEA France ────────────────────────────────────────────────────────────────
- *   API : https://sik.search.blue.cdtapps.com/fr/fr/search-result-page
- *   Params : q={keyword}&size=3&format=json
- *   Retourne : nom, type, prix, imageUrl CDN, URL produit relatif → absolu
+ * Principe :
+ *  1. On envoie l'image générée (ou l'URL) à l'API OpenAI Responses
+ *     avec le tool "web_search_preview" activé.
+ *  2. Le prompt demande à ChatGPT d'identifier visuellement les meubles
+ *     présents dans l'image puis de chercher sur IKEA.fr les produits
+ *     correspondants avec leurs vraies URLs et images CDN.
+ *  3. On parse le JSON retourné → List<Product> avec données réelles.
  *
- * ── Conforama France ───────────────────────────────────────────────────────────
- *   API Algolia publique exposée par le site
- *   Retourne : nom, prix, imageUrl CDN, URL produit
- *
- * Si une API échoue → liste vide, fallback sur suggestions statiques.
+ * Avantages vs API IKEA directe :
+ *  - ChatGPT voit l'image → identifie les bons meubles visuellement
+ *  - Web search → vraies URLs produits, vraies images CDN, vrais prix
+ *  - Pas de dépendance à la structure interne de l'API IKEA
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class ProductSearchService {
 
-    // ── IKEA ───────────────────────────────────────────────────────────────────
-    private static final String IKEA_SEARCH_URL = "https://sik.search.blue.cdtapps.com/fr/fr/search-result-page";
-    private static final String IKEA_BASE_URL   = "https://www.ikea.com";
-
-    private static final int    MAX_PER_KEYWORD  = 2;
-    private static final Duration TIMEOUT        = Duration.ofSeconds(10);
+    private static final String OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+    private static final String SEARCH_MODEL         = "gpt-4.1";
+    private static final Duration TIMEOUT            = Duration.ofSeconds(90);
 
     private final AppProperties appProperties;
     private final ObjectMapper  objectMapper;
 
     // ── Point d'entrée ─────────────────────────────────────────────────────────
 
+    /**
+     * @param generation       génération dont on veut suggérer les produits
+     * @param style            style de décoration du projet
+     * @param preferredBrands  marques souhaitées (IKEA, CONFORAMA)
+     * @param resultImageUrl   URL publique de l'image générée
+     * @param imageBytes       bytes de l'image générée (pour envoi base64)
+     */
     public List<Product> searchProducts(Generation generation,
                                          DecorationStyle style,
-                                         List<ProductBrand> preferredBrands) {
+                                         List<ProductBrand> preferredBrands,
+                                         String resultImageUrl,
+                                         byte[] imageBytes) {
+
         List<String> brands = resolveBrands(preferredBrands);
         if (brands.isEmpty()) return List.of();
 
-        List<Product> all = new ArrayList<>();
-
-        for (String brand : brands) {
-            List<String> keywords = getStyleKeywords(style);
-            log.info("Recherche {} — {} mots-clés", brand, keywords.size());
-
-            for (String keyword : keywords) {
-                try {
-                    List<Product> found = switch (brand) {
-                        case "IKEA"      -> searchIkea(keyword, generation);
-                        case "CONFORAMA" -> searchConforama(keyword, generation);
-                        default          -> List.of();
-                    };
-                    all.addAll(found);
-                    if (all.size() >= 6) break;
-                } catch (Exception e) {
-                    log.warn("Recherche {} / '{}' échouée: {}", brand, keyword, e.getMessage());
-                }
-            }
+        String apiKey = appProperties.getAi().getOpenai().getApiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            log.warn("ProductSearchService: OPENAI_API_KEY non configurée, skip");
+            return List.of();
         }
 
-        log.info("Total produits trouvés: {}", all.size());
-        return all;
+        log.info("Recherche produits via ChatGPT Vision — style={} brands={}", style, brands);
+
+        try {
+            String responseText = callChatGptVisionSearch(
+                    apiKey, brands, style, resultImageUrl, imageBytes);
+            List<Product> products = parseProducts(responseText, generation);
+            log.info("Produits trouvés via ChatGPT Vision: {}", products.size());
+            return products;
+        } catch (Exception e) {
+            log.warn("Recherche produits ChatGPT échouée: {}", e.getMessage());
+            return List.of();
+        }
     }
 
-    // ── IKEA API ───────────────────────────────────────────────────────────────
+    // ── Appel OpenAI Responses API (Vision + Web Search) ───────────────────────
 
-    /**
-     * Appelle l'API publique IKEA France et retourne les produits correspondants.
-     * URL exemple :
-     *   https://sik.search.blue.cdtapps.com/fr/fr/search-result-page?q=canap%C3%A9&size=3
-     * Note : le paramètre format=json cause une erreur 400 — ne pas l'inclure.
-     */
-    private List<Product> searchIkea(String keyword, Generation generation) throws Exception {
-        String url = UriComponentsBuilder.fromHttpUrl(IKEA_SEARCH_URL)
-                .queryParam("q",    URLEncoder.encode(keyword, StandardCharsets.UTF_8))
-                .queryParam("size", MAX_PER_KEYWORD)
-                .build(true).toUriString();
+    private String callChatGptVisionSearch(String apiKey,
+                                            List<String> brands,
+                                            DecorationStyle style,
+                                            String resultImageUrl,
+                                            byte[] imageBytes) throws Exception {
+
+        String brandsStr = String.join(" et ", brands.stream()
+                .map(b -> "CONFORAMA".equals(b) ? "Conforama.fr" : "IKEA.fr")
+                .toList());
+
+        String prompt = buildPrompt(brandsStr, style);
+
+        // Construction du message avec image
+        // On préfère base64 (plus fiable en prod) sinon URL publique
+        Object imageContent;
+        if (imageBytes != null && imageBytes.length > 0) {
+            String b64 = Base64.getEncoder().encodeToString(imageBytes);
+            imageContent = Map.of(
+                    "type", "input_image",
+                    "image_url", "data:image/jpeg;base64," + b64
+            );
+        } else {
+            imageContent = Map.of(
+                    "type",      "input_image",
+                    "image_url", resultImageUrl
+            );
+        }
+
+        // Corps de la requête Responses API
+        Map<String, Object> body = Map.of(
+                "model", SEARCH_MODEL,
+                "tools", List.of(Map.of("type", "web_search_preview")),
+                "input", List.of(
+                        Map.of(
+                                "role", "user",
+                                "content", List.of(
+                                        imageContent,
+                                        Map.of("type", "input_text", "text", prompt)
+                                )
+                        )
+                )
+        );
 
         String raw = WebClient.builder()
-                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-                .defaultHeader(HttpHeaders.USER_AGENT,
-                        "Mozilla/5.0 (compatible; Roomix/1.0)")
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .codecs(cfg -> cfg.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
                 .build()
-                .get().uri(url)
+                .post()
+                .uri(OPENAI_RESPONSES_URL)
+                .bodyValue(body)
                 .retrieve()
                 .bodyToMono(String.class)
                 .timeout(TIMEOUT)
                 .block();
 
-        return parseIkeaResponse(raw, generation);
+        return extractText(raw);
     }
 
-    private List<Product> parseIkeaResponse(String raw, Generation generation) throws Exception {
-        JsonNode root  = objectMapper.readTree(raw);
-        JsonNode items = root.path("searchResultPage")
-                             .path("products")
-                             .path("main")
-                             .path("items");
+    // ── Prompt ─────────────────────────────────────────────────────────────────
 
-        List<Product> list = new ArrayList<>();
-        for (JsonNode item : items) {
-            try {
-                JsonNode p = item.path("product");
-                if (p.isMissingNode()) continue;
+    private String buildPrompt(String brands, DecorationStyle style) {
+        return "Tu es un expert en décoration intérieure. Regarde attentivement cette image.\n\n"
+             + "ÉTAPE 1 — Identifie visuellement les 4 à 6 principaux meubles et objets déco présents "
+             + "(canapé, table, lampe, tapis, chaise, étagère, plante, etc.).\n\n"
+             + "ÉTAPE 2 — Pour chacun, cherche sur " + brands + " un produit RÉEL actuellement en vente "
+             + "qui ressemble visuellement à ce que tu vois dans l'image.\n\n"
+             + "Pour chaque produit, fournis OBLIGATOIREMENT :\n"
+             + "• name      : nom complet exact du produit sur le site (ex: \"EKTORP Canapé 3 places\")\n"
+             + "• color     : couleur/finition exacte (ex: \"Hakebo beige\")\n"
+             + "• price     : prix en euros, nombre décimal (ex: 599.00)\n"
+             + "• productUrl: URL complète de la page produit "
+             + "(ex: https://www.ikea.com/fr/fr/p/ektorp-s49471272/)\n"
+             + "• imageUrl  : URL directe de l'image JPG du produit sur le CDN "
+             + "(ex: https://www.ikea.com/fr/fr/images/products/ektorp__1175522_s5.jpg)\n"
+             + "• brand     : \"IKEA\" ou \"CONFORAMA\" (majuscules)\n"
+             + "• category  : un mot parmi SOFA TABLE LAMP CARPET CHAIR DESK PLANT DECORATION OTHER\n\n"
+             + "RÈGLES STRICTES :\n"
+             + "- N'invente AUCUNE URL. Seulement des produits que tu as réellement trouvés.\n"
+             + "- Si tu ne trouves pas l'imageUrl exacte, mets null.\n"
+             + "- Chaque productUrl doit commencer par https://www.ikea.com ou https://www.conforama.fr\n\n"
+             + "Réponds UNIQUEMENT avec ce JSON, sans texte avant ni après :\n"
+             + "{\"products\":["
+             + "{\"name\":\"...\",\"color\":\"...\",\"price\":0.0,"
+             + "\"productUrl\":\"https://...\",\"imageUrl\":\"https://...\","
+             + "\"brand\":\"IKEA\",\"category\":\"SOFA\"}"
+             + "]}";
+    }
 
-                // Nom = brand name + type (ex: "FRIHETEN Canapé convertible")
-                String brandName = p.path("name").asText("").trim();
-                String typeName  = p.path("typeName").asText("").trim();
-                String name      = (brandName + " " + typeName).trim();
+    // ── Extraction du texte de la réponse OpenAI Responses API ─────────────────
 
-                // Image : mainImageUrl en priorité, sinon allProductImage[0].url
-                String imageUrl = firstNonBlank(
-                        p.path("mainImageUrl").asText(""),
-                        p.path("contextualImageUrl").asText("")
-                );
-                if (imageUrl.isBlank()) {
-                    JsonNode allImgs = p.path("allProductImage");
-                    if (allImgs.isArray() && allImgs.size() > 0) {
-                        imageUrl = allImgs.get(0).path("url").asText("");
+    private String extractText(String raw) throws Exception {
+        JsonNode root   = objectMapper.readTree(raw);
+        JsonNode output = root.path("output");
+        // Cherche le dernier message de type "message"
+        for (int i = output.size() - 1; i >= 0; i--) {
+            JsonNode item = output.get(i);
+            if ("message".equals(item.path("type").asText())) {
+                for (JsonNode c : item.path("content")) {
+                    if ("output_text".equals(c.path("type").asText())) {
+                        String text = c.path("text").asText();
+                        log.debug("ChatGPT Vision réponse brute ({}chars): {}...",
+                                text.length(), text.substring(0, Math.min(200, text.length())));
+                        return text;
                     }
                 }
-                log.debug("IKEA imageUrl='{}'", imageUrl);
-
-                // Lien produit : pipUrl en priorité, sinon construit depuis l'id produit
-                String pipUrl = p.path("pipUrl").asText("").trim();
-                String productUrl;
-                if (pipUrl.startsWith("https://www.ikea.com") && pipUrl.contains("/p/")) {
-                    productUrl = pipUrl;  // URL complète valide
-                } else {
-                    // Fallback : construire l'URL depuis l'id (ex: s39216754)
-                    String productId = p.path("id").asText(
-                                       p.path("itemNoGlobal").asText("")).trim();
-                    productUrl = productId.isBlank()
-                            ? ""
-                            : IKEA_BASE_URL + "/fr/fr/p/-" + productId + "/";
-                }
-                log.debug("IKEA pipUrl='{}' → productUrl='{}'", pipUrl, productUrl);
-
-                // Prix : salesPrice.numeral (float) ou wholeNumber fallback
-                JsonNode salesPrice = p.path("salesPrice");
-                double price = 0;
-                if (!salesPrice.isMissingNode()) {
-                    price = salesPrice.path("numeral").asDouble(0);
-                    if (price == 0) {
-                        String whole = salesPrice.path("wholeNumber").asText("0").replace(" ", "");
-                        try { price = Double.parseDouble(whole); } catch (Exception ignored) {}
-                    }
-                }
-
-                // Couleur : champ "colour" ou premier élément de "colors"
-                String color = null;
-                JsonNode colourNode = p.path("colour");
-                if (!colourNode.isMissingNode() && !colourNode.isNull()) {
-                    color = colourNode.path("name").asText(null);
-                }
-                if (color == null) {
-                    JsonNode colorsArr = p.path("colors");
-                    if (colorsArr.isArray() && colorsArr.size() > 0) {
-                        color = colorsArr.get(0).path("name").asText(null);
-                    }
-                }
-
-                ProductCategory cat = guessCategory(typeName.toLowerCase());
-
-                if (name.isBlank() || imageUrl.isBlank()) {
-                    log.debug("IKEA produit ignoré (nom/image vide): name={} img={}", name, imageUrl);
-                    continue;
-                }
-
-                log.info("IKEA produit trouvé: {} | {} | {}€ | img={}", name, productUrl, price, imageUrl);
-
-                list.add(Product.builder()
-                        .generation(generation)
-                        .name(name)
-                        .description(color)
-                        .category(cat)
-                        .brand(ProductBrand.IKEA)
-                        .price(price > 0 ? BigDecimal.valueOf(price) : null)
-                        .currency("EUR")
-                        .productUrl(productUrl.isBlank() ? null : productUrl)
-                        .affiliateUrl(productUrl.isBlank() ? null : productUrl)
-                        .imageUrl(imageUrl.startsWith("https://") ? imageUrl : null)
-                        .inStock(true)
-                        .build());
-            } catch (Exception e) {
-                log.debug("Produit IKEA ignoré: {}", e.getMessage());
             }
         }
-        return list;
+        throw new RuntimeException("Aucun texte dans la réponse OpenAI. Raw: "
+                + raw.substring(0, Math.min(300, raw.length())));
     }
 
-    // ── Conforama ──────────────────────────────────────────────────────────────
-    // Conforama ne dispose pas d'API publique JSON (site Next.js SSR uniquement).
-    // Les recherches Conforama retournent une liste vide → fallback IKEA uniquement.
-    private List<Product> searchConforama(String keyword, Generation generation) {
-        log.info("Conforama: pas d'API publique disponible, ignoré pour '{}'", keyword);
-        return List.of();
+    // ── Parsing JSON → List<Product> ──────────────────────────────────────────
+
+    private List<Product> parseProducts(String text, Generation generation) {
+        try {
+            // Extraire le JSON (peut y avoir du markdown autour)
+            int start = text.indexOf('{');
+            int end   = text.lastIndexOf('}');
+            if (start < 0 || end <= start) {
+                log.warn("Pas de JSON trouvé dans la réponse: {}", text.substring(0, Math.min(300, text.length())));
+                return List.of();
+            }
+            String json = text.substring(start, end + 1);
+            JsonNode root  = objectMapper.readTree(json);
+            JsonNode items = root.path("products");
+
+            List<Product> list = new ArrayList<>();
+            for (JsonNode node : items) {
+                try {
+                    list.add(parseOne(node, generation));
+                } catch (Exception e) {
+                    log.debug("Produit ignoré: {}", e.getMessage());
+                }
+            }
+            return list;
+        } catch (Exception e) {
+            log.warn("Erreur parsing produits: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private Product parseOne(JsonNode node, Generation generation) {
+        String name       = node.path("name").asText("Produit").trim();
+        String color      = nullIfBlank(node.path("color").asText(null));
+        String brandStr   = node.path("brand").asText("OTHER").toUpperCase();
+        String categoryStr= node.path("category").asText("OTHER").toUpperCase();
+        double price      = node.path("price").asDouble(0);
+        String productUrl = nullIfBlank(node.path("productUrl").asText(null));
+        String imageUrl   = nullIfBlank(node.path("imageUrl").asText(null));
+
+        // Validation URLs : doivent commencer par https://
+        if (productUrl != null && !productUrl.startsWith("https://")) productUrl = null;
+        if (imageUrl   != null && !imageUrl.startsWith("https://"))   imageUrl   = null;
+
+        ProductBrand brand;
+        try { brand = ProductBrand.valueOf(brandStr); }
+        catch (Exception e) { brand = ProductBrand.OTHER; }
+
+        ProductCategory category;
+        try { category = ProductCategory.valueOf(categoryStr); }
+        catch (Exception e) { category = ProductCategory.OTHER; }
+
+        log.info("Produit: {} | {} | {}€ | img={} | url={}",
+                name, brand, price,
+                imageUrl   != null ? "✓" : "✗",
+                productUrl != null ? "✓" : "✗");
+
+        return Product.builder()
+                .generation(generation)
+                .name(name)
+                .description(color)
+                .category(category)
+                .brand(brand)
+                .price(price > 0 ? BigDecimal.valueOf(price) : null)
+                .currency("EUR")
+                .productUrl(productUrl)
+                .affiliateUrl(productUrl)
+                .imageUrl(imageUrl)
+                .inStock(true)
+                .build();
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    private String firstNonBlank(String... values) {
-        for (String v : values) {
-            if (v != null && !v.isBlank()) return v;
-        }
-        return "";
-    }
-
-    private ProductCategory guessCategory(String text) {
-        String t = text.toLowerCase();
-        if (t.contains("canapé") || t.contains("sofa") || t.contains("couch"))  return ProductCategory.SOFA;
-        if (t.contains("table"))                                                  return ProductCategory.TABLE;
-        if (t.contains("lampe") || t.contains("lamp") || t.contains("lumi"))    return ProductCategory.LAMP;
-        if (t.contains("tapis") || t.contains("carpet") || t.contains("rug"))   return ProductCategory.CARPET;
-        if (t.contains("bureau") || t.contains("desk"))                          return ProductCategory.DESK;
-        if (t.contains("chaise") || t.contains("fauteuil") || t.contains("chair")) return ProductCategory.CHAIR;
-        if (t.contains("plante") || t.contains("plant"))                         return ProductCategory.PLANT;
-        if (t.contains("étagère") || t.contains("shelf") || t.contains("rangement")) return ProductCategory.SHELF;
-        return ProductCategory.OTHER;
+    private String nullIfBlank(String s) {
+        return (s == null || s.isBlank() || "null".equalsIgnoreCase(s)) ? null : s;
     }
 
     private List<String> resolveBrands(List<ProductBrand> preferredBrands) {
@@ -248,26 +285,7 @@ public class ProductSearchService {
                     .filter(b -> b == ProductBrand.IKEA || b == ProductBrand.CONFORAMA)
                     .map(Enum::name).toList();
         }
-        return List.of("IKEA", "CONFORAMA");
-    }
-
-    private List<String> getStyleKeywords(DecorationStyle style) {
-        return switch (style) {
-            case SCANDINAVIAN    -> List.of("canapé beige", "table basse chêne", "lampadaire");
-            case MODERN_LUXURY   -> List.of("canapé velours", "table basse marbre", "lustre");
-            case MINIMALIST      -> List.of("canapé gris", "table basse bois", "lampe sol");
-            case JAPANESE_ZEN    -> List.of("table basse bois", "coussin sol", "lampe");
-            case ARABIC_MODERN   -> List.of("canapé", "tapis", "lanterne");
-            case GAMER_SETUP     -> List.of("bureau", "chaise bureau", "lampe bureau");
-            case INDUSTRIAL      -> List.of("canapé cuir", "table métal", "lampe industrielle");
-            case COZY            -> List.of("canapé moelleux", "coussin", "lampe");
-            case BOHEMIAN        -> List.of("canapé", "tapis", "lampe rotin");
-            case MID_CENTURY     -> List.of("canapé", "table", "lampe arc");
-            case CONTEMPORARY    -> List.of("canapé modulable", "table verre", "lampe design");
-            case JAPANDI         -> List.of("canapé lin", "table bois", "vase");
-            case SMART_OFFICE    -> List.of("bureau", "chaise ergonomique", "lampe bureau");
-            case DEVELOPER_SETUP -> List.of("bureau", "chaise ergonomique", "étagère");
-            default              -> List.of("canapé", "table basse", "lampe");
-        };
+        return appProperties.getProductSearch().getBrands().stream()
+                .filter(b -> "IKEA".equals(b) || "CONFORAMA".equals(b)).toList();
     }
 }
