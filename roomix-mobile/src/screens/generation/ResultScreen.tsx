@@ -143,6 +143,16 @@ function ProductCard({ product }: { product: Product }) {
         </View>
       )}
 
+      {/* ── DEBUG : URLs visibles en mode test ── */}
+      {__DEV__ && (
+        <View style={ps.debugBox}>
+          <Text style={ps.debugLabel}>🖼 imageUrl :</Text>
+          <Text style={ps.debugUrl} selectable>{imageUrl ?? '—'}</Text>
+          <Text style={ps.debugLabel}>🔗 productUrl :</Text>
+          <Text style={ps.debugUrl} selectable>{productUrl ?? '—'}</Text>
+        </View>
+      )}
+
     </View>
   );
 }
@@ -700,6 +710,16 @@ const ps = StyleSheet.create({
     alignItems: 'center',
   },
   buyBtnDisabledText: { color: '#444', fontSize: 12 },
+
+  // ── Debug URLs (visible uniquement en __DEV__) ───────────────────────────────
+  debugBox: {
+    marginHorizontal: 12, marginBottom: 10,
+    backgroundColor: '#0d0d1a', borderRadius: 8,
+    borderWidth: 1, borderColor: '#2a2a4a',
+    padding: 8, gap: 2,
+  },
+  debugLabel: { color: '#4a4a7a', fontSize: 9, fontWeight: '700', marginTop: 4 },
+  debugUrl:   { color: '#6a6aaa', fontSize: 9, fontFamily: 'monospace' },
 
   // ── Budget total ─────────────────────────────────────────────────────────────
   totalBox: {
