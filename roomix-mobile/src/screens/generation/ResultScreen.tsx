@@ -286,6 +286,8 @@ export default function ResultScreen() {
   const [isSaving,       setIsSaving]       = useState(false);
   const [isSharing,      setIsSharing]      = useState(false);
   const [fullscreenUri,  setFullscreenUri]  = useState<string | null>(null);
+  const [afterImgError,  setAfterImgError]  = useState(false);
+  const [beforeImgError, setBeforeImgError] = useState(false);
 
   const startSliderRef   = useRef(0.5);
   const containerWRef    = useRef(windowWidth - CONTENT_PADDING);
@@ -451,6 +453,10 @@ export default function ResultScreen() {
       {/* ── Résultat ─────────────────────────────────── */}
       {isDone && project.generation?.resultImageUrl && (() => {
         const afterUri = normalizeImageUrl(project.generation!.resultImageUrl)!;
+
+        // Log URL en dev pour diagnostiquer les problèmes d'image
+        if (__DEV__) console.log('[ResultScreen] afterUri:', afterUri, '| beforeUri:', beforeUri);
+
         return (
           <>
             {/* Slider Avant / Après */}
@@ -463,22 +469,34 @@ export default function ResultScreen() {
               {...panResponder.panHandlers}
             >
               {/* Après — fond */}
-              <Image
-                source={{ uri: afterUri }}
-                style={[StyleSheet.absoluteFill, { width: containerWidth, height: COMPARISON_HEIGHT }]}
-                resizeMode="cover"
-              />
+              {afterImgError ? (
+                <View style={[StyleSheet.absoluteFill, s.imgErrorBox]}>
+                  <Text style={s.imgErrorEmoji}>🖼️</Text>
+                  <Text style={s.imgErrorText}>Image indisponible</Text>
+                  <Text style={s.imgErrorUrl} numberOfLines={2}>{afterUri}</Text>
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: afterUri }}
+                  style={[StyleSheet.absoluteFill, { width: containerWidth, height: COMPARISON_HEIGHT }]}
+                  resizeMode="cover"
+                  onError={() => { console.warn('[ResultScreen] Erreur chargement afterUri:', afterUri); setAfterImgError(true); }}
+                />
+              )}
               {/* Avant — clippé */}
               <View style={{
                 position: 'absolute', top: 0, left: 0,
                 width: Math.round(containerWidth * sliderValue),
                 height: COMPARISON_HEIGHT, overflow: 'hidden',
               }}>
-                <Image
-                  source={{ uri: beforeUri ?? undefined }}
-                  style={{ position: 'absolute', top: 0, left: 0, width: containerWidth, height: COMPARISON_HEIGHT }}
-                  resizeMode="cover"
-                />
+                {beforeImgError || !beforeUri ? null : (
+                  <Image
+                    source={{ uri: beforeUri ?? undefined }}
+                    style={{ position: 'absolute', top: 0, left: 0, width: containerWidth, height: COMPARISON_HEIGHT }}
+                    resizeMode="cover"
+                    onError={() => setBeforeImgError(true)}
+                  />
+                )}
               </View>
               {/* Séparateur */}
               <View style={{
@@ -764,6 +782,15 @@ const s = StyleSheet.create({
   errorDetail:{ color: '#cc8888', fontSize: 12, textAlign: 'center' },
   retryBtn:   { backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
   retryText:  { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  // Image error fallback
+  imgErrorBox: {
+    backgroundColor: '#12122e', alignItems: 'center',
+    justifyContent: 'center', gap: 8, padding: 20,
+  },
+  imgErrorEmoji: { fontSize: 40 },
+  imgErrorText:  { color: '#555', fontSize: 14, fontWeight: '700' },
+  imgErrorUrl:   { color: '#333', fontSize: 9, textAlign: 'center', paddingHorizontal: 20 },
 
   // Slider
   slider: {

@@ -5,16 +5,35 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080/api/v1
 
 /**
  * Normalise une URL d'image retournée par le backend.
- * En mode dev local, le backend génère des URLs avec "localhost" qui sont
- * inaccessibles depuis un appareil mobile — on remplace l'origine localhost
- * par l'hôte du backend configuré dans EXPO_PUBLIC_API_URL.
+ *
+ * Cas gérés :
+ *  1. URL Supabase / S3 externe  → retournée telle quelle
+ *  2. URL localhost:PORT           → remplacée par l'hôte Railway/prod
+ *  3. URL IP LAN (192.168.x.x)    → remplacée par l'hôte Railway/prod
+ *  4. URL /api/v1/storage/...     → chemin relatif → URL absolue Railway
  */
 export function normalizeImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  // Extraire la base du serveur (ex: http://192.168.0.11:8080) depuis l'API URL
+
+  // Déjà une URL CDN externe (Supabase, S3, IKEA, Conforama…) → OK
+  if (url.startsWith('https://') && !url.includes('localhost') && !url.match(/https?:\/\/\d+\.\d+/)) {
+    return url;
+  }
+
   const serverBase = API_URL.replace(/\/api\/v1\/?$/, '');
-  // Remplacer http://localhost:PORT par la vraie base du serveur
-  return url.replace(/^https?:\/\/localhost:\d+/, serverBase);
+
+  // localhost:PORT → serveur prod
+  let normalized = url.replace(/^https?:\/\/localhost(:\d+)?/, serverBase);
+
+  // IP LAN 192.168.x.x:PORT → serveur prod
+  normalized = normalized.replace(/^https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?/, serverBase);
+
+  // Chemin relatif → URL absolue
+  if (normalized.startsWith('/')) {
+    normalized = serverBase + normalized;
+  }
+
+  return normalized;
 }
 
 export const api = axios.create({
