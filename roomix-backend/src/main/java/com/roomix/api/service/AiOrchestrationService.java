@@ -217,7 +217,7 @@ public class AiOrchestrationService {
             final String finalPrompt = prompt;
             final byte[] finalImageBytes = imageBytes;
 
-            // 5a — Génération + DONE en DB
+            // 5a — Sauvegarder la génération (status reste PROCESSING)
             Generation generation = transactionTemplate.execute(tx -> {
                 Generation gen = Generation.builder()
                         .project(project)
@@ -228,14 +228,11 @@ public class AiOrchestrationService {
                         .processingTimeMs(processingTime)
                         .build();
                 generationRepository.save(gen);
-                project.setStatus(ProjectStatus.DONE);
-                projectRepository.save(project);
                 return gen;
             });
 
-            log.info("✓ Projet {} → DONE en {}ms", projectId, processingTime);
-
             // 5b — Recherche produits HORS transaction (appel ChatGPT Vision = long)
+            // IMPORTANT: on reste en PROCESSING pendant cette étape
             boolean searchOnline = Boolean.TRUE.equals(project.getProductSearchEnabled())
                     || appProperties.getProductSearch().isEnabled();
 
@@ -258,14 +255,17 @@ public class AiOrchestrationService {
                 products = List.of();
             }
 
-            // 5c — Sauvegarde produits
-            if (!products.isEmpty()) {
-                final List<Product> toSave = products;
-                transactionTemplate.execute(tx -> {
-                    productRepository.saveAll(toSave);
-                    return null;
-                });
-            }
+            // 5c — Sauvegarder produits + passer DONE (tout en une transaction)
+            // Le mobile ne verra DONE que quand les produits sont déjà en DB
+            final List<Product> toSave = products;
+            transactionTemplate.execute(tx -> {
+                if (!toSave.isEmpty()) productRepository.saveAll(toSave);
+                project.setStatus(ProjectStatus.DONE);
+                projectRepository.save(project);
+                return null;
+            });
+
+            log.info("✓ Projet {} → DONE en {}ms ({} produits)", projectId, processingTime, toSave.size());
 
         } catch (Exception e) {
             log.error("✗ Erreur génération projet {}: {}", projectId, e.getMessage(), e);
