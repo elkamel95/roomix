@@ -113,7 +113,7 @@ public class OpenAiService {
                                 Map.of("type", "image_url", "image_url", Map.of("url", imageParam))
                         ))
                 ),
-                "max_tokens", 800,
+                "max_completion_tokens", 800,
                 "response_format", Map.of("type", "json_object")
         );
 
@@ -381,7 +381,7 @@ public class OpenAiService {
                                 Map.of("type", "image_url", "image_url", Map.of("url", imageUrl))
                         ))
                 ),
-                "max_tokens", 100
+                "max_completion_tokens", 100
         );
 
         try {
