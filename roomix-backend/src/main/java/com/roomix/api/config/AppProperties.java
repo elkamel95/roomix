@@ -20,7 +20,7 @@ public class AppProperties {
     @Data
     public static class ProductSearch {
         /** Active la recherche en ligne de produits réels via ChatGPT Vision. */
-        private boolean enabled = false;
+        private boolean enabled = true;
         /** Marques à interroger : IKEA, CONFORAMA. */
         private List<String> brands = List.of("IKEA", "CONFORAMA");
         /** Nombre max de produits récupérés. */
