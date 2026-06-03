@@ -53,6 +53,7 @@ public class AiOrchestrationService {
     private final StorageService       storageService;
     private final AppProperties        appProperties;
     private final TransactionTemplate  transactionTemplate;
+    private final ProductSearchService productSearchService;
 
     @Async
     public void processProjectAsync(UUID projectId) {

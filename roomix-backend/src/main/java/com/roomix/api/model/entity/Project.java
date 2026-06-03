@@ -2,6 +2,7 @@ package com.roomix.api.model.entity;
 
 import com.roomix.api.model.enums.AiModel;
 import com.roomix.api.model.enums.DecorationStyle;
+import com.roomix.api.model.enums.ProductBrand;
 import com.roomix.api.model.enums.PromptMode;
 import com.roomix.api.model.enums.ProjectStatus;
 import jakarta.persistence.*;
@@ -145,6 +146,19 @@ public class Project {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "object_refs", columnDefinition = "jsonb")
     private List<Map<String, String>> objectRefs;
+
+    /** Active la recherche en ligne de produits réels (IKEA, Conforama…) pour ce projet. */
+    @Column(name = "product_search_enabled", nullable = false)
+    @Builder.Default
+    private Boolean productSearchEnabled = false;
+
+    /**
+     * Marques préférées pour la recherche produits (IKEA, CONFORAMA).
+     * Si null : utilise la config globale app.product-search.brands.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "preferred_brands", columnDefinition = "jsonb")
+    private List<ProductBrand> preferredBrands;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "ai_model", nullable = false)
