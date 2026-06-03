@@ -666,22 +666,24 @@ export default function UploadScreen() {
         </Text>
         {productSearchEnabled && (
           <View style={s.brandRow}>
-            {[
-              { key: 'IKEA',      emoji: '🟡', color: '#FFD700' },
-              { key: 'CONFORAMA', emoji: '🔴', color: '#E53935' },
-            ].map(({ key, emoji, color }) => {
-              const active = selectedBrands.includes(key);
-              return (
-                <TouchableOpacity
-                  key={key}
-                  style={[s.brandChip, active && { borderColor: color, backgroundColor: color + '22' }]}
-                  onPress={() => toggleBrand(key)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.brandChipText, active && { color }]}>{emoji} {key}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            {/* IKEA — API publique disponible */}
+            <TouchableOpacity
+              style={[s.brandChip, selectedBrands.includes('IKEA') && { borderColor: '#FFD700', backgroundColor: '#FFD70022' }]}
+              onPress={() => toggleBrand('IKEA')}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.brandChipText, selectedBrands.includes('IKEA') && { color: '#FFD700' }]}>
+                🟡 IKEA
+              </Text>
+            </TouchableOpacity>
+
+            {/* Conforama — pas d'API publique, désactivé */}
+            <View style={[s.brandChip, s.brandChipDisabled]}>
+              <Text style={s.brandChipTextDisabled}>🔴 Conforama</Text>
+              <View style={s.brandChipSoonBadge}>
+                <Text style={s.brandChipSoonText}>bientôt</Text>
+              </View>
+            </View>
           </View>
         )}
       </View>
@@ -974,7 +976,11 @@ const s = StyleSheet.create({
   productSubtitle:  { fontSize: 12, color: '#888', marginTop: 4 },
   brandRow:         { flexDirection: 'row', gap: 10, marginTop: 14 },
   brandChip:        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#3a3a6e' },
-  brandChipText:    { fontSize: 13, fontWeight: '700', color: '#aaa' },
+  brandChipText:        { fontSize: 13, fontWeight: '700', color: '#aaa' },
+  brandChipDisabled:    { opacity: 0.45, position: 'relative' },
+  brandChipTextDisabled:{ fontSize: 13, fontWeight: '700', color: '#555' },
+  brandChipSoonBadge:   { position: 'absolute', top: -8, right: -8, backgroundColor: '#444', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
+  brandChipSoonText:    { fontSize: 8, color: '#aaa', fontWeight: '700' },
 
   generateBtn:          { borderRadius: 16, overflow: 'hidden', marginTop: 32 },
   generateBtnDisabled:  { opacity: 0.45 },
