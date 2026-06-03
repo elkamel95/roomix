@@ -14,7 +14,7 @@ import {
 import StylePickerModal from '../../components/StylePickerModal';
 import {
   ObjectRef, PromptMode, ImageSize, ImageQuality, ImageFormat, ImageBackground,
-  projectService,
+  ProductBrand, projectService,
 } from '../../services/projectService';
 import { useProjectStore } from '../../store/slices/projectStore';
 import { useAuthStore } from '../../store/slices/authStore';
@@ -97,7 +97,7 @@ export default function UploadScreen() {
 
   // ── Recherche produits en ligne ───────────────────────────────────────────
   const [productSearchEnabled, setProductSearchEnabled] = useState(false);
-  const [selectedBrands,       setSelectedBrands]       = useState<string[]>([]);
+  const [selectedBrands,       setSelectedBrands]       = useState<string[]>(['IKEA']); // IKEA sélectionné par défaut
 
   const toggleBrand = (brand: string) => {
     setSelectedBrands(prev =>
@@ -222,6 +222,11 @@ export default function UploadScreen() {
         imageFormat,
         imageCompression,
         imageBackground,
+        // Recherche produits en ligne
+        productSearchEnabled,
+        preferredBrands: productSearchEnabled && selectedBrands.length > 0
+          ? (selectedBrands as ProductBrand[])
+          : undefined,
       });
       addProject(project, imageUri);
       router.replace(`/project/${project.id}`);

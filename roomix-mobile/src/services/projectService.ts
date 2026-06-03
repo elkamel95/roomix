@@ -26,6 +26,7 @@ export type ImageSize =
 export type ImageQuality    = 'auto' | 'low' | 'medium' | 'high';
 export type ImageFormat     = 'jpeg' | 'png' | 'webp';
 export type ImageBackground = 'auto' | 'opaque';
+export type ProductBrand    = 'IKEA' | 'CONFORAMA';
 
 export interface CreateProjectParams {
   imageUri: string;
@@ -41,8 +42,11 @@ export interface CreateProjectParams {
   imageSize?:        ImageSize;
   imageQuality?:     ImageQuality;
   imageFormat?:      ImageFormat;
-  imageCompression?: number;       // 0-100, pour jpeg/webp uniquement
+  imageCompression?: number;
   imageBackground?:  ImageBackground;
+  // Recherche produits en ligne
+  productSearchEnabled?: boolean;
+  preferredBrands?:      ProductBrand[];
 }
 
 export const projectService = {
@@ -52,6 +56,7 @@ export const projectService = {
       name, roomType, colorPalette, customNote, objectRefs,
       imageSize = 'auto', imageQuality = 'auto', imageFormat = 'jpeg',
       imageCompression = 85, imageBackground = 'auto',
+      productSearchEnabled = false, preferredBrands,
     } = params;
 
     const formData = new FormData();
@@ -68,6 +73,10 @@ export const projectService = {
     if (name)         formData.append('name',         name);
     if (colorPalette) formData.append('colorPalette', colorPalette);
     if (customNote)   formData.append('customNote',   customNote);
+    formData.append('productSearchEnabled', String(productSearchEnabled));
+    if (preferredBrands && preferredBrands.length > 0) {
+      preferredBrands.forEach(b => formData.append('preferredBrands', b));
+    }
 
     // Objets de référence (max 15 photos + titres)
     if (objectRefs && objectRefs.length > 0) {
