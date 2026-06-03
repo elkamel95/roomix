@@ -1,5 +1,6 @@
 package com.roomix.api.service;
 
+import com.roomix.api.exception.InsufficientTokensException;
 import com.roomix.api.exception.QuotaExceededException;
 import com.roomix.api.exception.ResourceNotFoundException;
 import com.roomix.api.model.dto.request.CreateProjectRequest;
@@ -46,6 +47,7 @@ class ProjectServiceTest {
     @Mock private UserRepository           userRepository;
     @Mock private StorageService           storageService;
     @Mock private AiOrchestrationService   aiOrchestrationService;
+    @Mock private TokenCostCalculator      tokenCostCalculator;
 
     @InjectMocks
     private ProjectService projectService;
@@ -59,6 +61,7 @@ class ProjectServiceTest {
                 .id(UUID.randomUUID())
                 .email("free@roomix.ai")
                 .plan(PlanType.FREE)
+                .tokenBalance(100)
                 .dailyGenerations(0)
                 .lastGenerationReset(LocalDate.now())
                 .build();
@@ -67,9 +70,13 @@ class ProjectServiceTest {
                 .id(UUID.randomUUID())
                 .email("premium@roomix.ai")
                 .plan(PlanType.PREMIUM)
+                .tokenBalance(10000)
                 .dailyGenerations(0)
                 .lastGenerationReset(LocalDate.now())
                 .build();
+
+        // TokenCostCalculator retourne 30 tokens par défaut (Qwen/Flux)
+        when(tokenCostCalculator.calculateCost(any(), any(), any())).thenReturn(30);
     }
 
     // ===================== CREATE PROJECT =====================
@@ -106,29 +113,28 @@ class ProjectServiceTest {
     }
 
     @Test
-    @DisplayName("createProject — lève QuotaExceededException si quota FREE épuisé")
-    void createProject_freeUser_quotaExceeded() {
-        freeUser.setDailyGenerations(3);
+    @DisplayName("createProject — lève InsufficientTokensException si solde insuffisant")
+    void createProject_freeUser_insufficientTokens() {
+        freeUser.setTokenBalance(5); // 5 tokens < 30 requis
         MockMultipartFile image = new MockMultipartFile(
                 "image", "room.jpg", "image/jpeg", new byte[100]);
         CreateProjectRequest req = new CreateProjectRequest();
         req.setStyle(DecorationStyle.COZY);
+        req.setAiModel(AiModel.QWEN);
 
         when(userRepository.findByEmail("free@roomix.ai")).thenReturn(Optional.of(freeUser));
 
         assertThatThrownBy(() -> projectService.createProject(
                         "free@roomix.ai", image, req, Collections.emptyList(), Collections.emptyList()))
-                .isInstanceOf(QuotaExceededException.class)
-                .hasMessageContaining("Premium");
+                .isInstanceOf(InsufficientTokensException.class);
 
         verify(projectRepository, never()).save(any());
         verify(aiOrchestrationService, never()).processProjectAsync(any());
     }
 
     @Test
-    @DisplayName("createProject — utilisateur PREMIUM bypass le quota")
-    void createProject_premiumUser_bypassesQuota() {
-        premiumUser.setDailyGenerations(100);
+    @DisplayName("createProject — utilisateur PREMIUM avec tokens suffisants")
+    void createProject_premiumUser_success() {
         MockMultipartFile image = new MockMultipartFile(
                 "image", "room.jpg", "image/jpeg", new byte[100]);
         CreateProjectRequest req = new CreateProjectRequest();
@@ -138,6 +144,7 @@ class ProjectServiceTest {
         when(userRepository.findByEmail("premium@roomix.ai")).thenReturn(Optional.of(premiumUser));
         when(storageService.uploadImage(any(), any())).thenReturn("key");
         when(storageService.getPublicUrl(any())).thenReturn("https://url");
+        when(userRepository.save(any())).thenReturn(premiumUser);
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> {
             Project p = inv.getArgument(0);
             ReflectionTestUtils.setField(p, "id", UUID.randomUUID());
@@ -148,9 +155,6 @@ class ProjectServiceTest {
                 projectService.createProject("premium@roomix.ai", image, req,
                         Collections.emptyList(), Collections.emptyList()));
 
-        // PREMIUM : pas de sauvegarde du compteur utilisateur
-        verify(userRepository, never()).save(any(User.class));
-        // L'async est tout de même planifié
         verify(aiOrchestrationService).processProjectAsync(any(UUID.class));
     }
 
