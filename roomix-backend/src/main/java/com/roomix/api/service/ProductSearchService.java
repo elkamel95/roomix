@@ -131,15 +131,33 @@ public class ProductSearchService {
                 String typeName  = p.path("typeName").asText("").trim();
                 String name      = (brandName + " " + typeName).trim();
 
-                // Image : mainImageUrl (URL CDN directe)
+                // Image : mainImageUrl en priorité, sinon allProductImage[0].url
                 String imageUrl = firstNonBlank(
                         p.path("mainImageUrl").asText(""),
                         p.path("contextualImageUrl").asText("")
                 );
+                if (imageUrl.isBlank()) {
+                    JsonNode allImgs = p.path("allProductImage");
+                    if (allImgs.isArray() && allImgs.size() > 0) {
+                        imageUrl = allImgs.get(0).path("url").asText("");
+                    }
+                }
+                log.debug("IKEA imageUrl='{}'", imageUrl);
 
-                // Lien produit : pipUrl (pas "url" !)
-                String pipUrl     = p.path("pipUrl").asText("");
-                String productUrl = pipUrl.startsWith("http") ? pipUrl : IKEA_BASE_URL + pipUrl;
+                // Lien produit : pipUrl en priorité, sinon construit depuis l'id produit
+                String pipUrl = p.path("pipUrl").asText("").trim();
+                String productUrl;
+                if (pipUrl.startsWith("https://www.ikea.com") && pipUrl.contains("/p/")) {
+                    productUrl = pipUrl;  // URL complète valide
+                } else {
+                    // Fallback : construire l'URL depuis l'id (ex: s39216754)
+                    String productId = p.path("id").asText(
+                                       p.path("itemNoGlobal").asText("")).trim();
+                    productUrl = productId.isBlank()
+                            ? ""
+                            : IKEA_BASE_URL + "/fr/fr/p/-" + productId + "/";
+                }
+                log.debug("IKEA pipUrl='{}' → productUrl='{}'", pipUrl, productUrl);
 
                 // Prix : salesPrice.numeral (float) ou wholeNumber fallback
                 JsonNode salesPrice = p.path("salesPrice");
