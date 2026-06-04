@@ -647,13 +647,18 @@ public class AiOrchestrationService {
         if (colorPalette != null && !colorPalette.isBlank())
             sb.append("\nColor palette preference: ").append(colorPalette).append(".");
         if (objectRefs != null && !objectRefs.isEmpty()) {
-            sb.append("\nIntegrate the following reference objects into the room:");
+            sb.append("\n\nCRITICAL — USE THESE EXACT PRODUCTS FROM THE REFERENCE IMAGES:");
+            sb.append("\nThe following images show REAL furniture products to place in the room.");
+            sb.append("\nYou MUST use these exact products — same shape, same color, same design.");
             for (int i = 0; i < objectRefs.size(); i++) {
-                String title = objectRefs.get(i).getOrDefault("title", "Object " + (i + 1));
-                sb.append("\n- Place the '").append(title)
-                  .append("' from reference image ").append(i + 2)
-                  .append(" realistically in the room.");
+                String title = objectRefs.get(i).getOrDefault("title", "Product " + (i + 1));
+                sb.append("\n- Reference image ").append(i + 2)
+                  .append(" shows: '").append(title)
+                  .append("' — place this EXACT product realistically in the room,")
+                  .append(" preserving its shape, texture, color and proportions.");
             }
+            sb.append("\nDo NOT replace these products with generic furniture.");
+            sb.append("\nThe goal is to show exactly how these real products look in this room.");
         }
         if (customNote != null && !customNote.isBlank())
             sb.append("\nUser specific request: ").append(customNote.trim());
@@ -781,16 +786,20 @@ public class AiOrchestrationService {
         if (customNote != null && !customNote.isBlank())
             sb.append("- ").append(customNote.trim()).append("\n");
 
-        // ── SECTION 2b : Objets de référence ─────────────────────────────────
+        // ── SECTION 2b : Produits réels à intégrer ───────────────────────────
         if (objectRefs != null && !objectRefs.isEmpty()) {
-            sb.append("\nADD THESE SPECIFIC REFERENCE OBJECTS INTO THE SCENE");
-            sb.append(" (visual reference images are provided — match them exactly):\n");
+            sb.append("\n\nCRITICAL INSTRUCTION — REAL PRODUCT INTEGRATION:");
+            sb.append("\nThe additional reference images show REAL furniture products from IKEA/Conforama.");
+            sb.append("\nYou MUST place these EXACT products in the renovated room:\n");
             for (Map<String, String> ref : objectRefs) {
-                String title = ref.getOrDefault("title", "reference object");
-                sb.append("- Place the exact '").append(title)
-                  .append("' shown in the reference image into the room. ")
-                  .append("Preserve its design, color, material and shape precisely.\n");
+                String title = ref.getOrDefault("title", "product");
+                sb.append("- '").append(title)
+                  .append("': place this exact product in the room. ")
+                  .append("Keep its exact shape, color, material and design. ")
+                  .append("Do NOT substitute with a different product.\n");
             }
+            sb.append("The final image must show these specific real products as if they were ");
+            sb.append("physically placed in the room — like an IKEA room planner visualization.\n");
         }
 
         // ── SECTION 3 : Rendering quality ────────────────────────────────────
