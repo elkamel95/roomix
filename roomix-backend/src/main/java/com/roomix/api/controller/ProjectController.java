@@ -6,6 +6,7 @@ import com.roomix.api.model.dto.response.ProductResponse;
 import com.roomix.api.model.dto.response.ProjectResponse;
 import com.roomix.api.model.enums.AiModel;
 import com.roomix.api.model.enums.DecorationStyle;
+import com.roomix.api.model.enums.ProductBrand;
 import com.roomix.api.model.enums.PromptMode;
 import com.roomix.api.model.enums.ProjectStatus;
 import com.roomix.api.service.ProjectService;
