@@ -80,14 +80,14 @@ api.interceptors.response.use(
       }
     }
 
-    // 403 → token invalide (ex: clé JWT différente entre Railway et local)
-    // Vider les tokens → le guard de navigation détectera isAuthenticated=false → login
+    // 403 → token invalide — vider silencieusement et déconnecter
     if (status === 403) {
       await SecureStore.deleteItemAsync('access_token');
       await SecureStore.deleteItemAsync('refresh_token');
-      // Réinitialiser le store sans importer directement (évite la dépendance circulaire)
       onForceLogout?.();
       if (__DEV__) console.warn('[API] 403 — token invalide, déconnexion forcée');
+      // Ne pas re-lancer l'erreur : la session sera redirigée vers login proprement
+      return Promise.resolve({ data: null, status: 403, headers: {}, config: error.config! } as any);
     }
 
     return Promise.reject(error);

@@ -28,12 +28,13 @@ function RootLayoutNav() {
       if (!token) return;
       try {
         const { data } = await api.get('/users/me');
-        setUser(data);
+        if (data) setUser(data);   // data=null si 403 résolu silencieusement
       } catch {
+        // Token expiré ou serveur indisponible → logout silencieux
         await logout();
       }
     };
-    restoreSession();
+    restoreSession().catch(() => {});  // jamais d'erreur non gérée
   }, []);
 
   return (
