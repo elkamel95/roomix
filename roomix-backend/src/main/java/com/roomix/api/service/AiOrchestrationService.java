@@ -1,6 +1,7 @@
 package com.roomix.api.service;
 
 import com.roomix.api.config.AppProperties;
+import com.roomix.api.model.dto.ProductWithImage;
 import com.roomix.api.model.entity.Generation;
 import com.roomix.api.model.entity.Product;
 import com.roomix.api.model.entity.Project;
@@ -103,7 +104,30 @@ public class AiOrchestrationService {
                 return null;
             });
 
-            // ── 4. Génération image ───────────────────────────────────────────
+            // ── 4. Recherche produits AVANT génération ────────────────────────
+            //
+            // Si productSearch activé :
+            //   1. OpenAI cherche les vrais produits IKEA/Conforama
+            //   2. Télécharge les images fond blanc
+            //   3. Injecte ces images comme références visuelles dans la génération
+            //   → L'IA génère la pièce EN INTÉGRANT les vrais produits trouvés
+
+            boolean searchOnline = Boolean.TRUE.equals(project.getProductSearchEnabled())
+                    || appProperties.getProductSearch().isEnabled();
+
+            List<com.roomix.api.model.dto.ProductWithImage> foundProducts = List.of();
+
+            if (searchOnline) {
+                log.info("Recherche produits avant génération — projet {}", projectId);
+                foundProducts = productSearchService.searchProductsForGeneration(
+                        project.getStyle(),
+                        project.getPreferredBrands(),
+                        project.getSearchItemsJson()
+                );
+                log.info("{} produit(s) trouvé(s) pour la génération", foundProducts.size());
+            }
+
+            // ── 5. Génération image ───────────────────────────────────────────
 
             // roomType : utilise la valeur forcée par l'utilisateur, sinon celle détectée par l'IA
             String roomType = project.getRoomType() != null
@@ -112,8 +136,20 @@ public class AiOrchestrationService {
 
             PromptMode promptMode = project.getPromptMode() != null ? project.getPromptMode() : PromptMode.CREATIVE;
 
-            // ── Résolution des objets de référence (commun à tous les modes) ──
+            // ── Résolution des objets de référence (utilisateur + produits trouvés) ──
             List<Map<String, String>> resolvedRefsForGeneration = resolveObjectRefs(project.getObjectRefs());
+
+            // Ajouter les images produits comme références visuelles pour la génération
+            if (!foundProducts.isEmpty()) {
+                List<Map<String, String>> productRefs = buildProductRefs(foundProducts);
+                List<Map<String, String>> combined = new ArrayList<>(resolvedRefsForGeneration);
+                combined.addAll(productRefs);
+                resolvedRefsForGeneration = combined;
+                log.info("Références de génération : {} user + {} produits = {} total",
+                        resolvedRefsForGeneration.size() - productRefs.size(),
+                        productRefs.size(),
+                        resolvedRefsForGeneration.size());
+            }
 
             String prompt;
             if (PromptMode.CHAIN.equals(promptMode)) {
@@ -211,13 +247,13 @@ public class AiOrchestrationService {
             log.info("Image générée: {}", resultImageUrl);
             int processingTime = (int) (Instant.now().toEpochMilli() - startTime);
 
-            // ── 5. Sauvegarder génération + DONE ─────────────────────────────
+            // ── 6. Sauvegarder génération + produits + DONE ──────────────────
             final String finalUrl    = resultImageUrl;
             final AiModel finalModel = usedModel;
             final String finalPrompt = prompt;
-            final byte[] finalImageBytes = imageBytes;
+            final List<com.roomix.api.model.dto.ProductWithImage> finalFoundProducts = foundProducts;
 
-            // 5a — Sauvegarder la génération (status reste PROCESSING)
+            // 6a — Sauvegarder la génération
             Generation generation = transactionTemplate.execute(tx -> {
                 Generation gen = Generation.builder()
                         .project(project)
@@ -231,25 +267,10 @@ public class AiOrchestrationService {
                 return gen;
             });
 
-            // 5b — Recherche produits HORS transaction (appel ChatGPT Vision = long)
-            // IMPORTANT: on reste en PROCESSING pendant cette étape
-            boolean searchOnline = Boolean.TRUE.equals(project.getProductSearchEnabled())
-                    || appProperties.getProductSearch().isEnabled();
-
+            // 6b — Convertir les produits trouvés (ou fallback statique)
             List<Product> products;
-            if (searchOnline && generation != null) {
-                log.info("Recherche produits via ChatGPT Vision — projet {}", projectId);
-                List<Product> online = productSearchService.searchProducts(
-                        generation,
-                        project.getStyle(),
-                        project.getPreferredBrands(),
-                        project.getSearchItemsJson(),
-                        finalUrl,
-                        finalImageBytes
-                );
-                products = online.isEmpty()
-                        ? generateProductSuggestions(generation, project.getStyle(), project.getBudget())
-                        : online;
+            if (!finalFoundProducts.isEmpty() && generation != null) {
+                products = productSearchService.toProducts(finalFoundProducts, generation);
             } else if (generation != null) {
                 products = generateProductSuggestions(generation, project.getStyle(), project.getBudget());
             } else {
@@ -292,6 +313,25 @@ public class AiOrchestrationService {
     // ──────────────────────────────────────────────────────────────────────────
     // Prompt builder
     // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Convertit les produits trouvés en références visuelles pour la génération IA.
+     * Chaque produit avec imageBytes devient un objectRef avec l'image base64.
+     */
+    private List<Map<String, String>> buildProductRefs(List<ProductWithImage> products) {
+        List<Map<String, String>> refs = new ArrayList<>();
+        for (ProductWithImage pw : products) {
+            if (pw.getImageBytes() == null || pw.getImageBytes().length == 0) continue;
+            String b64 = Base64.getEncoder().encodeToString(pw.getImageBytes());
+            Map<String, String> ref = new HashMap<>();
+            ref.put("title",      pw.getName() + (pw.getColor() != null ? " (" + pw.getColor() + ")" : ""));
+            ref.put("imageParam", "data:image/jpeg;base64," + b64);
+            ref.put("imageUrl",   pw.getImageUrl() != null ? pw.getImageUrl() : "");
+            refs.add(ref);
+            log.info("Produit injecté comme référence: {} ({} bytes)", pw.getName(), pw.getImageBytes().length);
+        }
+        return refs;
+    }
 
     /**
      * Pour chaque objet de référence, tente de lire les bytes locaux et de les encoder en base64.

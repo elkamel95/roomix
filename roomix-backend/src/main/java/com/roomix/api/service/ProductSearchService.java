@@ -3,6 +3,7 @@ package com.roomix.api.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.roomix.api.config.AppProperties;
+import com.roomix.api.model.dto.ProductWithImage;
 import com.roomix.api.model.entity.Generation;
 import com.roomix.api.model.entity.Product;
 import com.roomix.api.model.enums.DecorationStyle;
@@ -15,7 +16,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.InputStream;
 import java.math.BigDecimal;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -25,18 +29,16 @@ import java.util.Map;
 /**
  * Recherche de produits réels via ChatGPT Vision + Web Search.
  *
- * Principe :
- *  1. On envoie l'image générée (ou l'URL) à l'API OpenAI Responses
- *     avec le tool "web_search_preview" activé.
- *  2. Le prompt demande à ChatGPT d'identifier visuellement les meubles
- *     présents dans l'image puis de chercher sur IKEA.fr les produits
- *     correspondants avec leurs vraies URLs et images CDN.
- *  3. On parse le JSON retourné → List<Product> avec données réelles.
+ * Nouveau pipeline :
+ *  1. searchProductsForGeneration() — avant la génération IA
+ *     → OpenAI web_search_preview trouve les produits correspondant aux critères
+ *     → Télécharge les images fond blanc depuis les CDNs marchands
+ *     → Retourne List<ProductWithImage> (image bytes inclus)
  *
- * Avantages vs API IKEA directe :
- *  - ChatGPT voit l'image → identifie les bons meubles visuellement
- *  - Web search → vraies URLs produits, vraies images CDN, vrais prix
- *  - Pas de dépendance à la structure interne de l'API IKEA
+ *  2. Ces images sont injectées comme objectRefs dans la génération IA
+ *     → L'IA place les VRAIS produits trouvés dans la pièce générée
+ *
+ *  3. toProduct() — convertit ProductWithImage en entité Product pour la DB
  */
 @Service
 @Slf4j
@@ -45,94 +47,146 @@ public class ProductSearchService {
 
     private static final String OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
     private static final String SEARCH_MODEL         = "gpt-4.1";
-    private static final Duration TIMEOUT            = Duration.ofSeconds(90);
+    private static final Duration SEARCH_TIMEOUT     = Duration.ofSeconds(90);
+    private static final Duration IMG_TIMEOUT        = Duration.ofSeconds(15);
 
     private final AppProperties appProperties;
     private final ObjectMapper  objectMapper;
 
-    // ── Point d'entrée ─────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // Méthode principale — appelée AVANT la génération IA
+    // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * @param generation       génération dont on veut suggérer les produits
-     * @param style            style de décoration du projet
-     * @param preferredBrands  marques souhaitées (IKEA, CONFORAMA)
-     * @param resultImageUrl   URL publique de l'image générée
-     * @param imageBytes       bytes de l'image générée (pour envoi base64)
+     * Cherche des produits réels correspondant aux critères, télécharge leurs images
+     * (fond blanc depuis CDN marchand) et retourne la liste avec bytes d'image.
+     *
+     * @param style           style de décoration du projet
+     * @param preferredBrands marques souhaitées
+     * @param searchItemsJson articles spécifiques JSON [{category, maxBudget, color}]
+     * @return liste de produits avec imageBytes prêts à être utilisés comme objectRefs
      */
-    public List<Product> searchProducts(Generation generation,
-                                         DecorationStyle style,
-                                         List<ProductBrand> preferredBrands,
-                                         String searchItemsJson,
-                                         String resultImageUrl,
-                                         byte[] imageBytes) {
-
-        List<String> brands = resolveBrands(preferredBrands);
-        if (brands.isEmpty()) return List.of();
+    public List<ProductWithImage> searchProductsForGeneration(
+            DecorationStyle style,
+            List<ProductBrand> preferredBrands,
+            String searchItemsJson) {
 
         String apiKey = appProperties.getAi().getOpenai().getApiKey();
         if (apiKey == null || apiKey.isBlank()) {
-            log.warn("ProductSearchService: OPENAI_API_KEY non configurée, skip");
+            log.warn("ProductSearchService: OPENAI_API_KEY manquante");
             return List.of();
         }
 
-        log.info("Recherche produits via ChatGPT Vision — style={} brands={}", style, brands);
-
-        try {
-            String responseText = callChatGptVisionSearch(
-                    apiKey, brands, style, searchItemsJson, resultImageUrl, imageBytes);
-            List<Product> products = parseProducts(responseText, generation);
-            log.info("Produits trouvés via ChatGPT Vision: {}", products.size());
-            return products;
-        } catch (Exception e) {
-            log.warn("Recherche produits ChatGPT échouée: {}", e.getMessage());
-            return List.of();
-        }
-    }
-
-    // ── Appel OpenAI Responses API (Vision + Web Search) ───────────────────────
-
-    private String callChatGptVisionSearch(String apiKey,
-                                            List<String> brands,
-                                            DecorationStyle style,
-                                            String searchItemsJson,
-                                            String resultImageUrl,
-                                            byte[] imageBytes) throws Exception {
+        List<String> brands = resolveBrands(preferredBrands);
+        if (brands.isEmpty()) return List.of();
 
         String brandsStr = String.join(" et ", brands.stream()
                 .map(b -> "CONFORAMA".equals(b) ? "Conforama.fr" : "IKEA.fr")
                 .toList());
 
-        String prompt = buildPrompt(brandsStr, style, searchItemsJson);
+        log.info("Recherche produits pour génération — style={} brands={}", style, brands);
 
-        // Construction du message avec image
-        // On préfère base64 (plus fiable en prod) sinon URL publique
-        Object imageContent;
-        if (imageBytes != null && imageBytes.length > 0) {
-            String b64 = Base64.getEncoder().encodeToString(imageBytes);
-            imageContent = Map.of(
-                    "type", "input_image",
-                    "image_url", "data:image/jpeg;base64," + b64
-            );
-        } else {
-            imageContent = Map.of(
-                    "type",      "input_image",
-                    "image_url", resultImageUrl
-            );
+        try {
+            String prompt = buildSearchPrompt(brandsStr, style, searchItemsJson);
+            String rawText = callOpenAiWebSearch(apiKey, prompt);
+            List<ProductWithImage> products = parseAndDownload(rawText);
+            log.info("Produits trouvés et images téléchargées: {}", products.size());
+            return products;
+        } catch (Exception e) {
+            log.warn("Recherche produits échouée: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Conversion ProductWithImage → Product (entité JPA pour la DB)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public List<Product> toProducts(List<ProductWithImage> pwList, Generation generation) {
+        List<Product> result = new ArrayList<>();
+        for (ProductWithImage pw : pwList) {
+            result.add(Product.builder()
+                    .generation(generation)
+                    .name(pw.getName())
+                    .description(pw.getColor())
+                    .category(pw.getCategory() != null ? pw.getCategory() : ProductCategory.OTHER)
+                    .brand(pw.getBrand() != null ? pw.getBrand() : ProductBrand.OTHER)
+                    .price(pw.getPrice())
+                    .currency("EUR")
+                    .productUrl(pw.getProductUrl())
+                    .affiliateUrl(pw.getProductUrl())
+                    .imageUrl(pw.getImageUrl())
+                    .inStock(true)
+                    .build());
+        }
+        return result;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Prompt de recherche (texte pur, pas de vision — on n'a pas encore l'image)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private String buildSearchPrompt(String brands, DecorationStyle style, String searchItemsJson) {
+        StringBuilder itemsBlock = new StringBuilder();
+        if (searchItemsJson != null && !searchItemsJson.isBlank()) {
+            try {
+                JsonNode items = objectMapper.readTree(searchItemsJson);
+                if (items.isArray() && items.size() > 0) {
+                    itemsBlock.append("L'utilisateur veut EXACTEMENT ces articles :\n");
+                    for (JsonNode item : items) {
+                        String cat    = item.path("category").asText("").toLowerCase().replace("_", " ");
+                        String budget = item.path("maxBudget").asText("").trim();
+                        String color  = item.path("color").asText("").trim();
+                        if (!cat.isBlank()) {
+                            itemsBlock.append("• ").append(cat);
+                            if (!color.isBlank())  itemsBlock.append(", couleur : ").append(color);
+                            if (!budget.isBlank()) itemsBlock.append(", budget max : ").append(budget).append("€");
+                            itemsBlock.append("\n");
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
         }
 
-        // Corps de la requête Responses API
+        String styleLabel = style.name().replace("_", " ").toLowerCase();
+        String itemsSection = itemsBlock.length() > 0
+                ? itemsBlock.toString()
+                : "les meubles principaux pour un intérieur style " + styleLabel
+                  + " (canapé, table, lampe, tapis)";
+
+        return "Tu es un expert en décoration intérieure et shopping en ligne.\n\n"
+             + "Cherche sur " + brands + " les produits suivants :\n"
+             + itemsSection + "\n"
+             + "RÈGLES STRICTES :\n"
+             + "1. Trouve des produits RÉELLEMENT disponibles sur " + brands + "\n"
+             + "2. Pour imageUrl : utilise l'URL CDN directe de l'image produit SUR FOND BLANC\n"
+             + "   - IKEA : https://www.ikea.com/fr/fr/images/products/...jpg\n"
+             + "   - Conforama : URL CDN directe de leur site\n"
+             + "3. Choisis l'image où le meuble est seul sur fond blanc (pas de mise en scène)\n"
+             + "4. N'invente aucune URL — seulement des produits réels que tu as vus\n\n"
+             + "Réponds UNIQUEMENT avec ce JSON (sans texte avant ni après) :\n"
+             + "{\"products\":[\n"
+             + "  {\n"
+             + "    \"name\": \"EKTORP Canapé 3 places\",\n"
+             + "    \"color\": \"Hakebo beige\",\n"
+             + "    \"price\": 599.00,\n"
+             + "    \"brand\": \"IKEA\",\n"
+             + "    \"category\": \"SOFA\",\n"
+             + "    \"productUrl\": \"https://www.ikea.com/fr/fr/p/ektorp-s49471272/\",\n"
+             + "    \"imageUrl\": \"https://www.ikea.com/fr/fr/images/products/ektorp__1175522_s5.jpg\"\n"
+             + "  }\n"
+             + "]}";
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Appel OpenAI Responses API (web_search_preview, texte pur)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private String callOpenAiWebSearch(String apiKey, String prompt) throws Exception {
         Map<String, Object> body = Map.of(
                 "model", SEARCH_MODEL,
                 "tools", List.of(Map.of("type", "web_search_preview")),
-                "input", List.of(
-                        Map.of(
-                                "role", "user",
-                                "content", List.of(
-                                        imageContent,
-                                        Map.of("type", "input_text", "text", prompt)
-                                )
-                        )
-                )
+                "input", prompt
         );
 
         String raw = WebClient.builder()
@@ -140,127 +194,77 @@ public class ProductSearchService {
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .codecs(cfg -> cfg.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
                 .build()
-                .post()
-                .uri(OPENAI_RESPONSES_URL)
+                .post().uri(OPENAI_RESPONSES_URL)
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(String.class)
-                .timeout(TIMEOUT)
+                .timeout(SEARCH_TIMEOUT)
                 .block();
 
         return extractText(raw);
     }
 
-    // ── Prompt ─────────────────────────────────────────────────────────────────
-
-    private String buildPrompt(String brands, DecorationStyle style, String searchItemsJson) {
-        // Construire la liste d'articles si fournie
-        StringBuilder itemsBlock = new StringBuilder();
-        if (searchItemsJson != null && !searchItemsJson.isBlank()) {
-            try {
-                com.fasterxml.jackson.databind.JsonNode items = objectMapper.readTree(searchItemsJson);
-                if (items.isArray() && items.size() > 0) {
-                    itemsBlock.append("\nL'utilisateur cherche SPÉCIFIQUEMENT :\n");
-                    for (com.fasterxml.jackson.databind.JsonNode item : items) {
-                        String cat    = item.path("category").asText("OTHER");
-                        String budget = item.path("maxBudget").asText("").trim();
-                        String color  = item.path("color").asText("").trim();
-                        itemsBlock.append("• ").append(cat.toLowerCase().replace("_", " "));
-                        if (!color.isBlank())  itemsBlock.append(" — couleur : ").append(color);
-                        if (!budget.isBlank()) itemsBlock.append(" — budget max : ").append(budget).append("€");
-                        itemsBlock.append("\n");
-                    }
-                }
-            } catch (Exception e) {
-                log.debug("Impossible de parser searchItemsJson: {}", e.getMessage());
-            }
-        }
-
-        return "Tu es un expert en décoration intérieure. Regarde attentivement cette image.\n\n"
-             + (itemsBlock.length() > 0
-                ? itemsBlock + "\nPour ces articles, cherche sur " + brands + " les produits correspondants.\n\n"
-                : "ÉTAPE 1 — Identifie visuellement les 4 à 6 principaux meubles et objets déco présents "
-                + "(canapé, table, lampe, tapis, chaise, étagère, plante, etc.).\n\n"
-                + "ÉTAPE 2 — Pour chacun, cherche sur " + brands + " un produit RÉEL actuellement en vente "
-                + "qui ressemble visuellement à ce que tu vois dans l'image.\n\n"
-               )
-             + "Pour chaque produit, fournis OBLIGATOIREMENT :\n"
-             + "• name      : nom complet exact du produit sur le site (ex: \"EKTORP Canapé 3 places\")\n"
-             + "• color     : couleur/finition exacte (ex: \"Hakebo beige\")\n"
-             + "• price     : prix en euros, nombre décimal (ex: 599.00)\n"
-             + "• productUrl: URL complète de la page produit "
-             + "(ex: https://www.ikea.com/fr/fr/p/ektorp-s49471272/)\n"
-             + "• imageUrl  : URL directe de l'image JPG du produit sur le CDN "
-             + "(ex: https://www.ikea.com/fr/fr/images/products/ektorp__1175522_s5.jpg)\n"
-             + "• brand     : \"IKEA\" ou \"CONFORAMA\" (majuscules)\n"
-             + "• category  : un mot parmi SOFA TABLE LAMP CARPET CHAIR DESK PLANT DECORATION OTHER\n\n"
-             + "RÈGLES STRICTES :\n"
-             + "- N'invente AUCUNE URL. Seulement des produits que tu as réellement trouvés.\n"
-             + "- Si tu ne trouves pas l'imageUrl exacte, mets null.\n"
-             + "- Chaque productUrl doit commencer par https://www.ikea.com ou https://www.conforama.fr\n\n"
-             + "Réponds UNIQUEMENT avec ce JSON, sans texte avant ni après :\n"
-             + "{\"products\":["
-             + "{\"name\":\"...\",\"color\":\"...\",\"price\":0.0,"
-             + "\"productUrl\":\"https://...\",\"imageUrl\":\"https://...\","
-             + "\"brand\":\"IKEA\",\"category\":\"SOFA\"}"
-             + "]}";
-    }
-
-    // ── Extraction du texte de la réponse OpenAI Responses API ─────────────────
-
     private String extractText(String raw) throws Exception {
         JsonNode root   = objectMapper.readTree(raw);
         JsonNode output = root.path("output");
-        // Cherche le dernier message de type "message"
         for (int i = output.size() - 1; i >= 0; i--) {
             JsonNode item = output.get(i);
             if ("message".equals(item.path("type").asText())) {
                 for (JsonNode c : item.path("content")) {
                     if ("output_text".equals(c.path("type").asText())) {
-                        String text = c.path("text").asText();
-                        log.debug("ChatGPT Vision réponse brute ({}chars): {}...",
-                                text.length(), text.substring(0, Math.min(200, text.length())));
-                        return text;
+                        return c.path("text").asText();
                     }
                 }
             }
         }
-        throw new RuntimeException("Aucun texte dans la réponse OpenAI. Raw: "
-                + raw.substring(0, Math.min(300, raw.length())));
+        throw new RuntimeException("Aucun texte dans la réponse OpenAI");
     }
 
-    // ── Parsing JSON → List<Product> ──────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
+    // Parse JSON + téléchargement images
+    // ──────────────────────────────────────────────────────────────────────────
 
-    private List<Product> parseProducts(String text, Generation generation) {
-        try {
-            // Extraire le JSON (peut y avoir du markdown autour)
-            int start = text.indexOf('{');
-            int end   = text.lastIndexOf('}');
-            if (start < 0 || end <= start) {
-                log.warn("Pas de JSON trouvé dans la réponse: {}", text.substring(0, Math.min(300, text.length())));
-                return List.of();
-            }
-            String json = text.substring(start, end + 1);
-            JsonNode root  = objectMapper.readTree(json);
-            JsonNode items = root.path("products");
-
-            List<Product> list = new ArrayList<>();
-            for (JsonNode node : items) {
-                try {
-                    list.add(parseOne(node, generation));
-                } catch (Exception e) {
-                    log.debug("Produit ignoré: {}", e.getMessage());
-                }
-            }
-            return list;
-        } catch (Exception e) {
-            log.warn("Erreur parsing produits: {}", e.getMessage());
+    private List<ProductWithImage> parseAndDownload(String text) throws Exception {
+        int start = text.indexOf('{');
+        int end   = text.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            log.warn("Pas de JSON dans la réponse OpenAI");
             return List.of();
         }
+        JsonNode root  = objectMapper.readTree(text.substring(start, end + 1));
+        JsonNode items = root.path("products");
+
+        List<ProductWithImage> result = new ArrayList<>();
+        for (JsonNode node : items) {
+            try {
+                ProductWithImage pw = parseOne(node);
+                if (pw == null) continue;
+
+                // Télécharger l'image produit (fond blanc)
+                if (pw.getImageUrl() != null) {
+                    byte[] bytes = downloadImage(pw.getImageUrl());
+                    if (bytes != null && bytes.length > 0) {
+                        pw.setImageBytes(bytes);
+                        log.info("Produit: {} | {} | {}€ | image={}bytes",
+                                pw.getName(), pw.getBrand(), pw.getPrice(), bytes.length);
+                        result.add(pw);
+                    } else {
+                        log.debug("Image non téléchargeable pour {}", pw.getName());
+                        // On garde quand même le produit sans bytes (pas de référence visuelle)
+                        result.add(pw);
+                    }
+                } else {
+                    result.add(pw);
+                }
+            } catch (Exception e) {
+                log.debug("Produit ignoré: {}", e.getMessage());
+            }
+        }
+        return result;
     }
 
-    private Product parseOne(JsonNode node, Generation generation) {
-        String name       = node.path("name").asText("Produit").trim();
+    private ProductWithImage parseOne(JsonNode node) {
+        String name       = node.path("name").asText("").trim();
         String color      = nullIfBlank(node.path("color").asText(null));
         String brandStr   = node.path("brand").asText("OTHER").toUpperCase();
         String categoryStr= node.path("category").asText("OTHER").toUpperCase();
@@ -268,7 +272,7 @@ public class ProductSearchService {
         String productUrl = nullIfBlank(node.path("productUrl").asText(null));
         String imageUrl   = nullIfBlank(node.path("imageUrl").asText(null));
 
-        // Validation URLs : doivent commencer par https://
+        if (name.isBlank()) return null;
         if (productUrl != null && !productUrl.startsWith("https://")) productUrl = null;
         if (imageUrl   != null && !imageUrl.startsWith("https://"))   imageUrl   = null;
 
@@ -280,30 +284,43 @@ public class ProductSearchService {
         try { category = ProductCategory.valueOf(categoryStr); }
         catch (Exception e) { category = ProductCategory.OTHER; }
 
-        log.info("Produit: {} | {} | {}€ | img={} | url={}",
-                name, brand, price,
-                imageUrl   != null ? "✓" : "✗",
-                productUrl != null ? "✓" : "✗");
-
-        return Product.builder()
-                .generation(generation)
+        return ProductWithImage.builder()
                 .name(name)
-                .description(color)
-                .category(category)
+                .color(color)
                 .brand(brand)
+                .category(category)
                 .price(price > 0 ? BigDecimal.valueOf(price) : null)
-                .currency("EUR")
                 .productUrl(productUrl)
-                .affiliateUrl(productUrl)
                 .imageUrl(imageUrl)
-                .inStock(true)
                 .build();
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    private byte[] downloadImage(String url) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URI(url).toURL().openConnection();
+            conn.setConnectTimeout(8_000);
+            conn.setReadTimeout(12_000);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; Roomix/1.0)");
+            conn.setRequestProperty("Accept", "image/*,*/*");
+            conn.setRequestProperty("Referer", "https://www.ikea.com/");
+            if (conn.getResponseCode() == 200) {
+                try (InputStream in = conn.getInputStream()) {
+                    return in.readAllBytes();
+                }
+            }
+            log.debug("Image HTTP {} pour {}", conn.getResponseCode(), url);
+        } catch (Exception e) {
+            log.debug("Erreur téléchargement image {}: {}", url, e.getMessage());
+        }
+        return null;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ──────────────────────────────────────────────────────────────────────────
 
     private String nullIfBlank(String s) {
-        return (s == null || s.isBlank() || "null".equalsIgnoreCase(s)) ? null : s;
+        return (s == null || s.isBlank() || "null".equalsIgnoreCase(s.trim())) ? null : s.trim();
     }
 
     private List<String> resolveBrands(List<ProductBrand> preferredBrands) {
