@@ -243,6 +243,7 @@ public class AiOrchestrationService {
                         generation,
                         project.getStyle(),
                         project.getPreferredBrands(),
+                        project.getSearchItemsJson(),
                         finalUrl,
                         finalImageBytes
                 );

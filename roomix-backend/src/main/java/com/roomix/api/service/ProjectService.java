@@ -114,6 +114,9 @@ public class ProjectService {
                 .imageCompression(request.getImageCompression() != null ? request.getImageCompression() : 85)
                 .imageBackground(request.getImageBackground() != null ? request.getImageBackground() : "auto")
                 .objectRefs(objectRefs.isEmpty() ? null : objectRefs)
+                .productSearchEnabled(Boolean.TRUE.equals(request.getProductSearchEnabled()))
+                .preferredBrands(request.getPreferredBrands())
+                .searchItemsJson(request.getSearchItemsJson())
                 .build();
 
         projectRepository.save(project);

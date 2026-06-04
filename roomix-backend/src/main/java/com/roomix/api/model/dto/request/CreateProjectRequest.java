@@ -82,6 +82,17 @@ public class CreateProjectRequest {
     /** Fond de l'image : 'auto', 'opaque'. */
     private String imageBackground = "auto";
 
+    // ── Recherche produits en ligne ─────────────────────────────────────────────
+
+    /** Si true : ChatGPT recherche des produits réels en ligne après génération. */
+    private Boolean productSearchEnabled = false;
+
+    /** Marques à interroger (IKEA, CONFORAMA). */
+    private List<ProductBrand> preferredBrands;
+
+    /** Articles souhaités en JSON : [{category, maxBudget, color}] */
+    private String searchItemsJson;
+
     // objectRefs ne passe pas dans le DTO — les fichiers MultipartFile sont traités
     // directement dans le contrôleur et assemblés dans ProjectService.
 }

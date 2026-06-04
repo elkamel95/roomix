@@ -28,6 +28,13 @@ export type ImageFormat     = 'jpeg' | 'png' | 'webp';
 export type ImageBackground = 'auto' | 'opaque';
 export type ProductBrand    = 'IKEA' | 'CONFORAMA';
 
+export interface SearchItem {
+  id:        string;
+  category:  string;   // SOFA, TABLE, LAMP, CARPET, CHAIR, DESK, PLANT, DECORATION, OTHER
+  maxBudget: string;   // ex: "500"
+  color:     string;   // ex: "beige", "gris"
+}
+
 export interface CreateProjectParams {
   imageUri: string;
   style: DecorationStyle;
@@ -47,6 +54,7 @@ export interface CreateProjectParams {
   // Recherche produits en ligne
   productSearchEnabled?: boolean;
   preferredBrands?:      ProductBrand[];
+  searchItems?:          SearchItem[];   // articles spécifiques avec budget + couleur
 }
 
 export const projectService = {
@@ -56,7 +64,7 @@ export const projectService = {
       name, roomType, colorPalette, customNote, objectRefs,
       imageSize = 'auto', imageQuality = 'auto', imageFormat = 'jpeg',
       imageCompression = 85, imageBackground = 'auto',
-      productSearchEnabled = false, preferredBrands,
+      productSearchEnabled = false, preferredBrands, searchItems,
     } = params;
 
     const formData = new FormData();
@@ -76,6 +84,9 @@ export const projectService = {
     formData.append('productSearchEnabled', String(productSearchEnabled));
     if (preferredBrands && preferredBrands.length > 0) {
       preferredBrands.forEach(b => formData.append('preferredBrands', b));
+    }
+    if (searchItems && searchItems.length > 0) {
+      formData.append('searchItems', JSON.stringify(searchItems));
     }
 
     // Objets de référence (max 15 photos + titres)

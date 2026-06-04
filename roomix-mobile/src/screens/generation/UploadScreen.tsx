@@ -14,7 +14,7 @@ import {
 import StylePickerModal from '../../components/StylePickerModal';
 import {
   ObjectRef, PromptMode, ImageSize, ImageQuality, ImageFormat, ImageBackground,
-  ProductBrand, projectService,
+  ProductBrand, SearchItem, projectService,
 } from '../../services/projectService';
 import { useProjectStore } from '../../store/slices/projectStore';
 import { useAuthStore } from '../../store/slices/authStore';
@@ -97,13 +97,42 @@ export default function UploadScreen() {
 
   // ── Recherche produits en ligne ───────────────────────────────────────────
   const [productSearchEnabled, setProductSearchEnabled] = useState(false);
-  const [selectedBrands,       setSelectedBrands]       = useState<string[]>(['IKEA']); // IKEA sélectionné par défaut
+  const [selectedBrands,       setSelectedBrands]       = useState<ProductBrand[]>(['IKEA']);
+  const [searchItems,          setSearchItems]          = useState<SearchItem[]>([]);
 
-  const toggleBrand = (brand: string) => {
+  const BRANDS: { key: ProductBrand; emoji: string; color: string }[] = [
+    { key: 'IKEA',      emoji: '🟡', color: '#FFD700' },
+    { key: 'CONFORAMA', emoji: '🔴', color: '#E53935' },
+  ];
+
+  const ITEM_CATEGORIES = [
+    { key: 'SOFA',       label: 'Canapé',     emoji: '🛋️' },
+    { key: 'TABLE',      label: 'Table',       emoji: '🪵' },
+    { key: 'LAMP',       label: 'Lampe',       emoji: '💡' },
+    { key: 'CARPET',     label: 'Tapis',       emoji: '🟫' },
+    { key: 'CHAIR',      label: 'Chaise',      emoji: '🪑' },
+    { key: 'DESK',       label: 'Bureau',      emoji: '🖥️' },
+    { key: 'PLANT',      label: 'Plante',      emoji: '🌿' },
+    { key: 'DECORATION', label: 'Décoration',  emoji: '🖼️' },
+    { key: 'OTHER',      label: 'Autre',       emoji: '📦' },
+  ];
+
+  const toggleBrand = (brand: ProductBrand) =>
     setSelectedBrands(prev =>
       prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
     );
-  };
+
+  const addSearchItem = () =>
+    setSearchItems(prev => [...prev, {
+      id: Math.random().toString(36).slice(2),
+      category: 'SOFA', maxBudget: '', color: '',
+    }]);
+
+  const removeSearchItem = (id: string) =>
+    setSearchItems(prev => prev.filter(i => i.id !== id));
+
+  const updateSearchItem = (id: string, field: keyof SearchItem, value: string) =>
+    setSearchItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
 
   // ── Token system ──────────────────────────────────────────────────────────
   const { user } = useAuthStore();
@@ -225,8 +254,9 @@ export default function UploadScreen() {
         // Recherche produits en ligne
         productSearchEnabled,
         preferredBrands: productSearchEnabled && selectedBrands.length > 0
-          ? (selectedBrands as ProductBrand[])
-          : undefined,
+          ? selectedBrands : undefined,
+        searchItems: productSearchEnabled && searchItems.length > 0
+          ? searchItems : undefined,
       });
       addProject(project, imageUri);
       router.replace(`/project/${project.id}`);
@@ -652,44 +682,106 @@ export default function UploadScreen() {
         </View>
       )}
 
-      {/* ── Produits en ligne ───────────────────────────── */}
+      {/* ── 11. Produits en ligne ───────────────────────── */}
       <View style={s.productSection}>
+
+        {/* Toggle header */}
         <View style={s.productHeader}>
-          <Text style={s.productTitle}>🛍️ Produits en ligne</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.productTitle}>🛍️ Produits en ligne</Text>
+            <Text style={s.productSubtitle}>
+              ChatGPT cherche de vrais produits avec images et prix
+            </Text>
+          </View>
           <Switch
             value={productSearchEnabled}
-            onValueChange={(v) => {
-              setProductSearchEnabled(v);
-              if (!v) setSelectedBrands([]);
-            }}
+            onValueChange={v => { setProductSearchEnabled(v); }}
             trackColor={{ false: '#2a2a5e', true: '#6D28D9' }}
             thumbColor={productSearchEnabled ? '#9B5DEA' : '#888'}
           />
         </View>
-        <Text style={s.productSubtitle}>
-          Trouve des meubles réels correspondant à votre style
-        </Text>
-        {productSearchEnabled && (
-          <View style={s.brandRow}>
-            {/* IKEA — API publique disponible */}
-            <TouchableOpacity
-              style={[s.brandChip, selectedBrands.includes('IKEA') && { borderColor: '#FFD700', backgroundColor: '#FFD70022' }]}
-              onPress={() => toggleBrand('IKEA')}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.brandChipText, selectedBrands.includes('IKEA') && { color: '#FFD700' }]}>
-                🟡 IKEA
-              </Text>
-            </TouchableOpacity>
 
-            {/* Conforama — pas d'API publique, désactivé */}
-            <View style={[s.brandChip, s.brandChipDisabled]}>
-              <Text style={s.brandChipTextDisabled}>🔴 Conforama</Text>
-              <View style={s.brandChipSoonBadge}>
-                <Text style={s.brandChipSoonText}>bientôt</Text>
-              </View>
+        {productSearchEnabled && (
+          <>
+            {/* ── Choix marques ── */}
+            <Text style={s.psLabel}>Marques</Text>
+            <View style={s.brandRow}>
+              {BRANDS.map(b => {
+                const active = selectedBrands.includes(b.key);
+                return (
+                  <TouchableOpacity
+                    key={b.key}
+                    style={[s.brandChip, active && { borderColor: b.color, backgroundColor: b.color + '18' }]}
+                    onPress={() => toggleBrand(b.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[s.brandChipText, active && { color: b.color }]}>
+                      {b.emoji} {b.key}
+                    </Text>
+                    {active && <Text style={[s.brandCheckmark, { color: b.color }]}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          </View>
+
+            {/* ── Articles spécifiques ── */}
+            <Text style={s.psLabel}>Articles souhaités</Text>
+
+            {searchItems.map((item) => (
+              <View key={item.id} style={s.itemCard}>
+                {/* Ligne 1 : catégorie + supprimer */}
+                <View style={s.itemRow}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                    style={{ flex: 1 }} contentContainerStyle={s.catScroll}>
+                    {ITEM_CATEGORIES.map(c => (
+                      <TouchableOpacity
+                        key={c.key}
+                        style={[s.catChip, item.category === c.key && s.catChipActive]}
+                        onPress={() => updateSearchItem(item.id, 'category', c.key)}
+                      >
+                        <Text style={s.catChipEmoji}>{c.emoji}</Text>
+                        <Text style={[s.catChipText, item.category === c.key && s.catChipTextActive]}>
+                          {c.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <TouchableOpacity style={s.itemRemove} onPress={() => removeSearchItem(item.id)}>
+                    <Text style={s.itemRemoveText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Ligne 2 : budget + couleur */}
+                <View style={s.itemFields}>
+                  <View style={s.itemField}>
+                    <Text style={s.itemFieldLabel}>💰 Budget max (€)</Text>
+                    <TextInput
+                      style={s.itemFieldInput}
+                      placeholder="ex: 500"
+                      placeholderTextColor="#444"
+                      keyboardType="numeric"
+                      value={item.maxBudget}
+                      onChangeText={v => updateSearchItem(item.id, 'maxBudget', v)}
+                    />
+                  </View>
+                  <View style={s.itemField}>
+                    <Text style={s.itemFieldLabel}>🎨 Couleur</Text>
+                    <TextInput
+                      style={s.itemFieldInput}
+                      placeholder="ex: beige"
+                      placeholderTextColor="#444"
+                      value={item.color}
+                      onChangeText={v => updateSearchItem(item.id, 'color', v)}
+                    />
+                  </View>
+                </View>
+              </View>
+            ))}
+
+            <TouchableOpacity style={s.addItemBtn} onPress={addSearchItem}>
+              <Text style={s.addItemBtnText}>＋ Ajouter un article</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -973,19 +1065,66 @@ const s = StyleSheet.create({
   },
   tokenWarningText: { color: '#EF4444', fontSize: 12, fontWeight: '700', textAlign: 'center' },
 
-  // Generate button
-  // Produits en ligne
-  productSection:   { marginTop: 28, backgroundColor: '#1a1a3e', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#2a2a5e' },
-  productHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  productTitle:     { fontSize: 15, fontWeight: '700', color: '#fff' },
-  productSubtitle:  { fontSize: 12, color: '#888', marginTop: 4 },
-  brandRow:         { flexDirection: 'row', gap: 10, marginTop: 14 },
-  brandChip:        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#3a3a6e' },
-  brandChipText:        { fontSize: 13, fontWeight: '700', color: '#aaa' },
-  brandChipDisabled:    { opacity: 0.45, position: 'relative' },
-  brandChipTextDisabled:{ fontSize: 13, fontWeight: '700', color: '#555' },
-  brandChipSoonBadge:   { position: 'absolute', top: -8, right: -8, backgroundColor: '#444', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
-  brandChipSoonText:    { fontSize: 8, color: '#aaa', fontWeight: '700' },
+  // ── Section produits en ligne ──────────────────────────────────────────────────
+  productSection:  {
+    marginTop: 28, backgroundColor: '#1a1a3e', borderRadius: 16,
+    padding: 16, borderWidth: 1.5, borderColor: '#2a2a5e',
+  },
+  productHeader:   { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  productTitle:    { fontSize: 15, fontWeight: '800', color: '#fff' },
+  productSubtitle: { fontSize: 12, color: '#666', marginTop: 3 },
+  psLabel:         { color: '#888', fontSize: 12, fontWeight: '700', marginTop: 16, marginBottom: 8 },
+
+  // Marques
+  brandRow:      { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  brandChip:     {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 20, borderWidth: 1.5, borderColor: '#3a3a6e',
+  },
+  brandChipText:     { fontSize: 13, fontWeight: '700', color: '#aaa' },
+  brandCheckmark:    { fontSize: 12, fontWeight: '900' },
+
+  // Article item
+  itemCard:  {
+    backgroundColor: '#12122e', borderRadius: 14, borderWidth: 1,
+    borderColor: '#2a2a5e', padding: 12, marginBottom: 10, gap: 10,
+  },
+  itemRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  itemRemove:{
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#2a1a1a', alignItems: 'center', justifyContent: 'center',
+  },
+  itemRemoveText: { color: '#ff6b6b', fontSize: 14, fontWeight: '800' },
+
+  // Chips catégorie
+  catScroll:        { flexDirection: 'row' },
+  catChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#1a1a3e', borderRadius: 16, borderWidth: 1, borderColor: '#2a2a5e',
+    paddingHorizontal: 10, paddingVertical: 6, marginRight: 6,
+  },
+  catChipActive:    { borderColor: '#7C3AED', backgroundColor: '#2d1b69' },
+  catChipEmoji:     { fontSize: 14 },
+  catChipText:      { color: '#888', fontSize: 12, fontWeight: '600' },
+  catChipTextActive:{ color: '#fff' },
+
+  // Champs budget + couleur
+  itemFields:     { flexDirection: 'row', gap: 10 },
+  itemField:      { flex: 1, gap: 4 },
+  itemFieldLabel: { color: '#666', fontSize: 11, fontWeight: '600' },
+  itemFieldInput: {
+    backgroundColor: '#0f0f23', borderRadius: 10, borderWidth: 1,
+    borderColor: '#2a2a5e', color: '#fff', fontSize: 13,
+    paddingHorizontal: 12, paddingVertical: 9,
+  },
+
+  // Bouton ajouter article
+  addItemBtn: {
+    borderWidth: 1.5, borderColor: '#7C3AED', borderStyle: 'dashed',
+    borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 4,
+  },
+  addItemBtnText: { color: '#7C3AED', fontWeight: '700', fontSize: 14 },
 
   generateBtn:          { borderRadius: 16, overflow: 'hidden', marginTop: 32 },
   generateBtnDisabled:  { opacity: 0.45 },

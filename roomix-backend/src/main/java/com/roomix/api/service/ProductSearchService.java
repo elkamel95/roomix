@@ -62,6 +62,7 @@ public class ProductSearchService {
     public List<Product> searchProducts(Generation generation,
                                          DecorationStyle style,
                                          List<ProductBrand> preferredBrands,
+                                         String searchItemsJson,
                                          String resultImageUrl,
                                          byte[] imageBytes) {
 
@@ -78,7 +79,7 @@ public class ProductSearchService {
 
         try {
             String responseText = callChatGptVisionSearch(
-                    apiKey, brands, style, resultImageUrl, imageBytes);
+                    apiKey, brands, style, searchItemsJson, resultImageUrl, imageBytes);
             List<Product> products = parseProducts(responseText, generation);
             log.info("Produits trouvés via ChatGPT Vision: {}", products.size());
             return products;
@@ -93,6 +94,7 @@ public class ProductSearchService {
     private String callChatGptVisionSearch(String apiKey,
                                             List<String> brands,
                                             DecorationStyle style,
+                                            String searchItemsJson,
                                             String resultImageUrl,
                                             byte[] imageBytes) throws Exception {
 
@@ -100,7 +102,7 @@ public class ProductSearchService {
                 .map(b -> "CONFORAMA".equals(b) ? "Conforama.fr" : "IKEA.fr")
                 .toList());
 
-        String prompt = buildPrompt(brandsStr, style);
+        String prompt = buildPrompt(brandsStr, style, searchItemsJson);
 
         // Construction du message avec image
         // On préfère base64 (plus fiable en prod) sinon URL publique
@@ -151,12 +153,37 @@ public class ProductSearchService {
 
     // ── Prompt ─────────────────────────────────────────────────────────────────
 
-    private String buildPrompt(String brands, DecorationStyle style) {
+    private String buildPrompt(String brands, DecorationStyle style, String searchItemsJson) {
+        // Construire la liste d'articles si fournie
+        StringBuilder itemsBlock = new StringBuilder();
+        if (searchItemsJson != null && !searchItemsJson.isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode items = objectMapper.readTree(searchItemsJson);
+                if (items.isArray() && items.size() > 0) {
+                    itemsBlock.append("\nL'utilisateur cherche SPÉCIFIQUEMENT :\n");
+                    for (com.fasterxml.jackson.databind.JsonNode item : items) {
+                        String cat    = item.path("category").asText("OTHER");
+                        String budget = item.path("maxBudget").asText("").trim();
+                        String color  = item.path("color").asText("").trim();
+                        itemsBlock.append("• ").append(cat.toLowerCase().replace("_", " "));
+                        if (!color.isBlank())  itemsBlock.append(" — couleur : ").append(color);
+                        if (!budget.isBlank()) itemsBlock.append(" — budget max : ").append(budget).append("€");
+                        itemsBlock.append("\n");
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Impossible de parser searchItemsJson: {}", e.getMessage());
+            }
+        }
+
         return "Tu es un expert en décoration intérieure. Regarde attentivement cette image.\n\n"
-             + "ÉTAPE 1 — Identifie visuellement les 4 à 6 principaux meubles et objets déco présents "
-             + "(canapé, table, lampe, tapis, chaise, étagère, plante, etc.).\n\n"
-             + "ÉTAPE 2 — Pour chacun, cherche sur " + brands + " un produit RÉEL actuellement en vente "
-             + "qui ressemble visuellement à ce que tu vois dans l'image.\n\n"
+             + (itemsBlock.length() > 0
+                ? itemsBlock + "\nPour ces articles, cherche sur " + brands + " les produits correspondants.\n\n"
+                : "ÉTAPE 1 — Identifie visuellement les 4 à 6 principaux meubles et objets déco présents "
+                + "(canapé, table, lampe, tapis, chaise, étagère, plante, etc.).\n\n"
+                + "ÉTAPE 2 — Pour chacun, cherche sur " + brands + " un produit RÉEL actuellement en vente "
+                + "qui ressemble visuellement à ce que tu vois dans l'image.\n\n"
+               )
              + "Pour chaque produit, fournis OBLIGATOIREMENT :\n"
              + "• name      : nom complet exact du produit sur le site (ex: \"EKTORP Canapé 3 places\")\n"
              + "• color     : couleur/finition exacte (ex: \"Hakebo beige\")\n"

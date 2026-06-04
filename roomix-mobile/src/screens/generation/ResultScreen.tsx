@@ -86,7 +86,11 @@ function ProductCard({ product }: { product: Product }) {
       <View style={ps.imgCol}>
         {hasImage ? (
           <Image
-            source={{ uri: product.imageUrl! }}
+            source={{
+              uri: product.imageUrl!,
+              headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*' },
+              cache: 'force-cache',
+            }}
             style={ps.img}
             resizeMode="cover"
             onError={() => setImgError(true)}

@@ -160,6 +160,10 @@ public class Project {
     @Column(name = "preferred_brands", columnDefinition = "jsonb")
     private List<ProductBrand> preferredBrands;
 
+    /** Articles souhaités JSON : [{category, maxBudget, color}] */
+    @Column(name = "search_items_json", columnDefinition = "TEXT")
+    private String searchItemsJson;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "ai_model", nullable = false)
     @Builder.Default

@@ -57,8 +57,11 @@ public class ProjectController {
             @RequestParam(value = "imageFormat",      defaultValue = "jpeg")     String imageFormat,
             @RequestParam(value = "imageCompression", defaultValue = "85")       Integer imageCompression,
             @RequestParam(value = "imageBackground",  defaultValue = "auto")     String imageBackground,
-            @RequestPart(value = "objectImages",      required = false) List<MultipartFile> objectImages,
-            @RequestParam(value = "objectTitles",     required = false) List<String> objectTitles) {
+            @RequestPart(value = "objectImages",        required = false) List<MultipartFile> objectImages,
+            @RequestParam(value = "objectTitles",       required = false) List<String> objectTitles,
+            @RequestParam(value = "productSearchEnabled", defaultValue = "false") Boolean productSearchEnabled,
+            @RequestParam(value = "preferredBrands",    required = false) List<String> preferredBrands,
+            @RequestParam(value = "searchItems",        required = false) String searchItemsJson) {
         CreateProjectRequest request = new CreateProjectRequest();
         request.setStyle(DecorationStyle.valueOf(style));
         request.setAiModel(AiModel.valueOf(aiModel));
@@ -81,6 +84,13 @@ public class ProjectController {
         request.setImageFormat(imageFormat);
         request.setImageCompression(imageCompression);
         request.setImageBackground(imageBackground);
+        request.setProductSearchEnabled(productSearchEnabled);
+        if (preferredBrands != null && !preferredBrands.isEmpty()) {
+            request.setPreferredBrands(preferredBrands.stream()
+                    .map(b -> ProductBrand.valueOf(b.toUpperCase()))
+                    .toList());
+        }
+        request.setSearchItemsJson(searchItemsJson);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(projectService.createProject(
                         userDetails.getUsername(), image, request,
