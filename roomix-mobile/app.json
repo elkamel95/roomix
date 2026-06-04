@@ -17,7 +17,8 @@
       "bundleIdentifier": "ai.roomix.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Pour prendre des photos de votre pièce",
-        "NSPhotoLibraryUsageDescription": "Pour importer des photos de votre galerie"
+        "NSPhotoLibraryUsageDescription": "Pour importer des photos de votre galerie",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,9 +28,10 @@
       },
       "package": "ai.roomix.app",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -45,6 +47,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "064a8945-472f-499a-b2b8-c73fa7ff843d"
+      }
     }
   }
 }
