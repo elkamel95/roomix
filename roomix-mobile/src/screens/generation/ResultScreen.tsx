@@ -629,30 +629,32 @@ const ps = StyleSheet.create({
   // ── Card pleine largeur horizontale ──────────────────────────────────────────
   card: {
     flexDirection: 'row',
+    alignItems: 'center',         // centrage vertical image/infos
     backgroundColor: '#1a1a3e',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#2a2a5e',
     overflow: 'hidden',
-    marginBottom: 12,
-    minHeight: 130,
+    marginBottom: 10,
+    padding: 10,
+    gap: 12,
   },
 
-  // ── Colonne image (gauche) ────────────────────────────────────────────────────
-  imgCol: { width: 110, flexShrink: 0 },
-  img: { width: 110, height: '100%', minHeight: 130 },
+  // ── Colonne image (gauche) — taille fixe carrée ───────────────────────────────
+  imgCol: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: 'hidden' },
+  img:    { width: 80, height: 80 },
   imgFallback: {
-    width: 110, minHeight: 130,
+    width: 80, height: 80,
     alignItems: 'center', justifyContent: 'center',
+    borderRadius: 10,
   },
-  imgFallbackEmoji: { fontSize: 36 },
+  imgFallbackEmoji: { fontSize: 28 },
 
   // ── Colonne infos (droite) ────────────────────────────────────────────────────
   infoCol: {
     flex: 1,
-    padding: 12,
-    gap: 5,
-    justifyContent: 'space-between',
+    gap: 4,
+    justifyContent: 'center',
   },
 
   // Nom
