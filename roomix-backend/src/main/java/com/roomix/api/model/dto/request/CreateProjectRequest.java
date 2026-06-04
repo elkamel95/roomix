@@ -2,12 +2,14 @@ package com.roomix.api.model.dto.request;
 
 import com.roomix.api.model.enums.AiModel;
 import com.roomix.api.model.enums.DecorationStyle;
+import com.roomix.api.model.enums.ProductBrand;
 import com.roomix.api.model.enums.PromptMode;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class CreateProjectRequest {
